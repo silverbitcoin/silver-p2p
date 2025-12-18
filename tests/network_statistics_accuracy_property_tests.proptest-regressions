@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc b7c97b3a0f0769ff07ed9c3a853cfe89c96245feff528518d03b0d8617fc341e # shrinks to peer_ids = ["peer_f", "peer_f"], addresses = ["1.1.1.1:10000"], roles = [Validator]
+cc ecefa3c6f4c420d9188b0c38fcb221097858c6dc915055ec85c9b9c3fa679bdb # shrinks to peer_ids = ["peer__", "peer__"], addresses = ["1.1.1.1:10000"], roles = [Validator], message_counts = [1], byte_counts = [0]

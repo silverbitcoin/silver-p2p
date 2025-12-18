@@ -1,0 +1,11 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3b1e22b9f47d5cd4da7cabdfa552ed1983476494e5daa7341a81382dccaf4c2d # shrinks to max_connections = 14, connection_attempts = 1
+cc 391f0d8aaf7239dcf4dc4d7a92e9696a2d4982661fa00318cd6f91ff098cea3f # shrinks to max_connections = 18, connections_to_add = 18, connections_to_remove = 0
+cc cde7b7912852e33e6943b84d2f6d06d378b344a47c53709282ba6fbda7c75deb # shrinks to peer_id = "peer0", rate_limit = 1
+cc 8c3eef53ed1e47e21c251a680fdca4c79990be33f9c56e4dbae7066e3351882d # shrinks to rate_limit = 24, messages_peer1 = 24, messages_peer2 = 24
+cc 2e8a5b6abe90391850b59823e8c1941dc34665dbf864294bdbaf162ac176de56 # shrinks to peer_id = "peer6", rate_limit = 60
