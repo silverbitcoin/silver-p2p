@@ -75,7 +75,7 @@ impl HealthMonitor {
                                 let msg = NetworkMessage::Ping { nonce };
 
                                 if let Ok(_msg_data) = message_handler.serialize(&msg).await {
-                                    if let Ok(_) = connection_pool.get_connection(&peer.peer_id).await {
+                                    if (connection_pool.get_connection(&peer.peer_id).await).is_ok() {
                                         pending_pings.insert(peer.peer_id.clone(), (nonce, SystemTime::now()));
                                         info!("Sent ping to peer: {} (nonce: {})", peer.peer_id, nonce);
                                     }

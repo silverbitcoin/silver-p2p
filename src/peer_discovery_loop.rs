@@ -265,14 +265,14 @@ impl PeerDiscoveryLoop {
                             debug!("Successfully connected to candidate: {}", candidate_addr);
 
                             // Add to connection pool
-                            if let Ok(_) = connection_pool.add_connection(peer_id.clone(), stream).await {
+                            if (connection_pool.add_connection(peer_id.clone(), stream).await).is_ok() {
                                 // Add to peer manager
-                                if let Ok(_) = peer_manager.add_peer(
+                                if (peer_manager.add_peer(
                                     peer_id.clone(),
                                     candidate_addr.clone(),
                                     crate::types::NodeRole::Validator,
                                 )
-                                .await
+                                .await).is_ok()
                                 {
                                     // Mark as connected
                                     let _ = peer_manager.mark_connected(&peer_id).await;

@@ -250,9 +250,13 @@ impl P2PNetworkManager {
                         match peer_manager.add_peer(peer_id.clone(), candidate.clone(), NodeRole::RPC).await {
                             Ok(_) => {
                                 // Mark as connected
-                                if let Ok(_) = peer_manager.mark_connected(&peer_id).await {
+                                if (peer_manager.mark_connected(&peer_id).await).is_ok() {
                                     info!("Successfully connected to candidate: {}", candidate);
                                     connected_count += 1;
+                                    // Update peer count after successful connection
+                                    if connected_count >= config.min_peers {
+                                        break;
+                                    }
                                 }
                             }
                             Err(e) => {

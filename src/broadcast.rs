@@ -162,7 +162,7 @@ impl BroadcastManager {
         }
 
         // Wait for all tasks to complete
-        while let Some(_) = join_set.join_next().await {}
+        while (join_set.join_next().await).is_some() {}
 
         let successful = successful_sends.load(Ordering::SeqCst);
         let failed = failed_sends.load(Ordering::SeqCst);
@@ -269,7 +269,7 @@ impl BroadcastManager {
             });
         }
 
-        while let Some(_) = join_set.join_next().await {}
+        while (join_set.join_next().await).is_some() {}
 
         let successful = successful_sends.load(Ordering::SeqCst);
         let failed = failed_sends.load(Ordering::SeqCst);
