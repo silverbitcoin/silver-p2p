@@ -95,9 +95,9 @@ impl HealthMonitor {
                                 if elapsed > timeout_duration {
                                     to_remove.push(peer_id.clone());
                                     warn!("Pong timeout for peer: {}", peer_id);
-                                    let _ = peer_manager.mark_unhealthy(&peer_id, "Pong timeout".to_string()).await;
+                                    let _ = peer_manager.mark_unhealthy(peer_id, "Pong timeout".to_string()).await;
                                     // Record failed ping - decreases health score
-                                    let _ = peer_manager.record_failed_ping(&peer_id).await;
+                                    let _ = peer_manager.record_failed_ping(peer_id).await;
                                 }
                             }
                         }

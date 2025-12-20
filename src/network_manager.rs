@@ -361,7 +361,7 @@ impl P2PNetworkManager {
             .get_all_peers()
             .await
             .iter()
-            .map(|peer| PeerInfo::from(peer))
+            .map(PeerInfo::from)
             .collect()
     }
 

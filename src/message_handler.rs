@@ -244,7 +244,7 @@ impl MessageHandler {
             ));
         }
 
-        let mut buf = &data[..];
+        let mut buf = data;
         let len = buf.get_u32_le() as usize;
 
         if len > self.max_message_size {
@@ -279,7 +279,7 @@ impl MessageHandler {
             return Err(error);
         }
 
-        let mut buf = &data[..];
+        let mut buf = data;
         let len = buf.get_u32_le() as usize;
 
         if len > self.max_message_size {
@@ -328,7 +328,7 @@ impl MessageHandler {
             ));
         }
 
-        let mut buf = &data[..];
+        let mut buf = data;
         let len = buf.get_u32_le() as usize;
 
         if len > self.max_message_size {
@@ -397,7 +397,7 @@ impl MessageHandler {
             ));
         }
 
-        let mut buf = &data[..];
+        let mut buf = data;
         let len = buf.get_u32_le() as usize;
 
         if len > self.max_message_size {

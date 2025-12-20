@@ -271,11 +271,7 @@ impl ConnectionLimiter {
     /// Get available slots
     pub fn available_slots(&self) -> usize {
         let current = self.get_connection_count();
-        if current >= self.max_connections {
-            0
-        } else {
-            self.max_connections - current
-        }
+        self.max_connections.saturating_sub(current)
     }
 
     /// Track rejected connection from peer

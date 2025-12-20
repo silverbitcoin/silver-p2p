@@ -314,7 +314,7 @@ impl BroadcastManager {
             let mut stream_guard = stream.lock().await;
             
             // Write the message data to the stream
-            stream_guard.write_all(&msg_data).await?;
+            stream_guard.write_all(msg_data).await?;
             
             // Flush to ensure data is sent immediately
             stream_guard.flush().await?;

@@ -171,7 +171,7 @@ impl MessageChunker {
             .next_message_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let total_size = data.len() as u64;
-        let total_chunks = ((data.len() + self.chunk_threshold - 1) / self.chunk_threshold) as u32;
+        let total_chunks = data.len().div_ceil(self.chunk_threshold) as u32;
 
         let mut chunks = Vec::new();
 
