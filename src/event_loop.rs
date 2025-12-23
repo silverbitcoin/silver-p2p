@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, error, info, warn};
+use serde_json;
 
 /// Main event loop for P2P network operations
 pub struct NetworkEventLoop {
@@ -195,7 +196,7 @@ impl NetworkEventLoop {
                     let message_data = &buffer[..n];
                     
                     // Deserialize the message
-                    match bincode::deserialize::<NetworkMessage>(message_data) {
+                    match serde_json::from_slice::<NetworkMessage>(message_data) {
                         Ok(message) => {
                             debug!("Deserialized message from peer {}: {:?}", peer_id, message);
                             

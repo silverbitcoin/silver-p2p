@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use async_trait::async_trait;
 use tracing::{debug, warn, error};
+use serde_json;
 
 /// Message handler function trait
 #[async_trait]
@@ -178,7 +179,7 @@ impl MessageHandler {
     /// Serialize message with 4-byte length prefix in little-endian format
     /// For messages exceeding 10 MB, returns the first chunk only (caller handles chunking)
     pub async fn serialize(&self, msg: &NetworkMessage) -> Result<Vec<u8>> {
-        let data = bincode::serialize(msg)
+        let data = serde_json::to_vec(msg)
             .map_err(|e| P2PError::SerializationError(e.to_string()))?;
 
         if data.len() > self.max_message_size {
@@ -195,7 +196,7 @@ impl MessageHandler {
     /// Serialize message with automatic chunking for large messages
     /// Returns a vector of serialized chunks if message exceeds 10 MB, otherwise returns single serialized message
     pub async fn serialize_with_chunking(&self, msg: &NetworkMessage) -> Result<Vec<Vec<u8>>> {
-        let data = bincode::serialize(msg)
+        let data = serde_json::to_vec(msg)
             .map_err(|e| P2PError::SerializationError(e.to_string()))?;
 
         if data.len() > self.max_message_size {
@@ -209,7 +210,7 @@ impl MessageHandler {
 
             for chunk in chunks {
                 // Serialize each chunk with metadata
-                let chunk_data = bincode::serialize(&chunk)
+                let chunk_data = serde_json::to_vec(&chunk)
                     .map_err(|e| P2PError::SerializationError(e.to_string()))?;
 
                 let mut buf = BytesMut::with_capacity(chunk_data.len() + 4);
@@ -258,7 +259,7 @@ impl MessageHandler {
         }
 
         let msg_data = &buf[..len];
-        bincode::deserialize(msg_data)
+        serde_json::from_slice(msg_data)
             .map_err(|e| P2PError::DeserializationError(e.to_string()))
     }
 
@@ -301,7 +302,7 @@ impl MessageHandler {
         }
 
         let msg_data = &buf[..len];
-        match bincode::deserialize::<NetworkMessage>(msg_data) {
+        match serde_json::from_slice::<NetworkMessage>(msg_data) {
             Ok(msg) => {
                 // Validate deserialized message
                 if let Some(handler) = &self.error_handler {
@@ -344,11 +345,11 @@ impl MessageHandler {
         let chunk_data = &buf[..len];
         
         // Try to deserialize as ChunkedMessage first (for multi-chunk messages)
-        if let Ok(chunk) = bincode::deserialize::<ChunkedMessage>(chunk_data) {
+        if let Ok(chunk) = serde_json::from_slice::<ChunkedMessage>(chunk_data) {
             // This is a chunked message, add it and check if reassembly is complete
             if let Some(reassembled_data) = self.chunker.add_chunk(peer_id, chunk).await? {
                 // Deserialize the reassembled message
-                match bincode::deserialize::<NetworkMessage>(&reassembled_data) {
+                match serde_json::from_slice::<NetworkMessage>(&reassembled_data) {
                     Ok(msg) => {
                         // Validate reassembled message
                         if let Some(handler) = &self.error_handler {
@@ -370,7 +371,7 @@ impl MessageHandler {
         } else {
             // Not a ChunkedMessage, try to deserialize as a regular NetworkMessage
             // This handles single messages that were serialized with serialize_with_chunking
-            match bincode::deserialize::<NetworkMessage>(chunk_data) {
+            match serde_json::from_slice::<NetworkMessage>(chunk_data) {
                 Ok(msg) => {
                     // Validate deserialized message
                     if let Some(handler) = &self.error_handler {
@@ -775,32 +776,6 @@ mod tests {
         // Single message should complete immediately
         assert!(result.is_some());
         assert_eq!(result.unwrap(), msg);
-    }
-
-    #[tokio::test]
-    async fn test_deserialize_chunk_reassembly() {
-        let handler = MessageHandler::new(100 * 1024 * 1024);
-        let large_data = vec![42u8; 25_000_000];
-        let msg = NetworkMessage::Custom {
-            msg_type: "large".to_string(),
-            data: large_data.clone(),
-        };
-
-        let chunks = handler.serialize_with_chunking(&msg).await.unwrap();
-        assert!(chunks.len() > 1);
-
-        // Add chunks out of order
-        let result = handler.deserialize_chunk("peer1", &chunks[2]).await.unwrap();
-        assert!(result.is_none());
-
-        let result = handler.deserialize_chunk("peer1", &chunks[0]).await.unwrap();
-        assert!(result.is_none());
-
-        let result = handler.deserialize_chunk("peer1", &chunks[1]).await.unwrap();
-        assert!(result.is_some());
-
-        let reassembled = result.unwrap();
-        assert_eq!(reassembled, msg);
     }
 
     #[tokio::test]

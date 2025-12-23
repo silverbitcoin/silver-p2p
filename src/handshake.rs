@@ -3,6 +3,7 @@
 use crate::error::{P2PError, Result};
 use crate::types::NodeRole;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -47,13 +48,13 @@ impl HandshakeMessage {
 
     /// Serialize handshake message to bytes
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        bincode::serialize(self)
+        serde_json::to_vec(self)
             .map_err(|e| P2PError::SerializationError(format!("Failed to serialize handshake: {}", e)))
     }
 
     /// Deserialize handshake message from bytes
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        bincode::deserialize(data)
+        serde_json::from_slice(data)
             .map_err(|e| P2PError::DeserializationError(format!("Failed to deserialize handshake: {}", e)))
     }
 }
