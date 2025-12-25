@@ -1,6 +1,6 @@
 [package]
 name = "silver-p2p"
-version = "2.5.3"
+version = "2.5.4"
 edition = "2021"
 rust-version = "1.90"
 authors = ["SilverBitcoin Team <team@silverbitcoin.org>"]
