@@ -113,9 +113,6 @@ impl P2PError {
 
     /// Check if error is fatal
     pub fn is_fatal(&self) -> bool {
-        matches!(
-            self,
-            P2PError::ConfigError(_) | P2PError::InternalError(_)
-        )
+        matches!(self, P2PError::ConfigError(_) | P2PError::InternalError(_))
     }
 }

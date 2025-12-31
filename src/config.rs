@@ -202,8 +202,8 @@ impl NetworkConfig {
         let node_id = std::env::var("SILVER_NODE_ID")
             .map_err(|_| P2PError::ConfigError("SILVER_NODE_ID not set".to_string()))?;
 
-        let node_role_str = std::env::var("SILVER_NODE_ROLE")
-            .unwrap_or_else(|_| "Validator".to_string());
+        let node_role_str =
+            std::env::var("SILVER_NODE_ROLE").unwrap_or_else(|_| "Validator".to_string());
 
         let node_role = match node_role_str.as_str() {
             "Validator" => NodeRole::Validator,

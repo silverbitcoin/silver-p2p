@@ -5,9 +5,9 @@ use crate::types::BackoffState;
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::net::TcpStream;
-use tokio::sync::{RwLock, Mutex};
 use tokio::io::AsyncWriteExt;
+use tokio::net::TcpStream;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, warn};
 
 /// Connection state information
@@ -65,18 +65,12 @@ impl ConnectionInfo {
 
     /// Get connection uptime in seconds
     pub fn uptime_secs(&self) -> u64 {
-        self.connected_at
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs()
+        self.connected_at.elapsed().unwrap_or_default().as_secs()
     }
 
     /// Get idle time in seconds
     pub fn idle_secs(&self) -> u64 {
-        self.last_activity
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs()
+        self.last_activity.elapsed().unwrap_or_default().as_secs()
     }
 }
 
@@ -115,11 +109,7 @@ impl RateLimiter {
 
     /// Check if message can be sent
     pub fn can_send(&mut self) -> bool {
-        let elapsed = self
-            .window_start
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs();
+        let elapsed = self.window_start.elapsed().unwrap_or_default().as_secs();
 
         // Reset window if 1 second has passed
         if elapsed >= 1 {
@@ -137,7 +127,8 @@ impl RateLimiter {
 
     /// Get remaining messages in current window
     pub fn remaining_in_window(&self) -> u32 {
-        self.max_msgs_per_sec.saturating_sub(self.messages_in_window)
+        self.max_msgs_per_sec
+            .saturating_sub(self.messages_in_window)
     }
 }
 
@@ -303,22 +294,22 @@ impl ConnectionPool {
         if let Some(conn) = self.connections.get(peer_id) {
             let info = conn.read().await;
             let stream = &info.stream;
-            
+
             // Verify the stream is still valid and can be written to
             // Get a mutable guard to the stream
             let mut stream_guard = stream.lock().await;
-            
+
             // Verify the stream is still connected by checking peer address
             match stream_guard.peer_addr() {
                 Ok(peer_addr) => {
                     debug!("Stream to {} is valid (peer_addr: {})", peer_id, peer_addr);
-                    
+
                     // Write the data to the stream
                     stream_guard.write_all(data).await?;
-                    
+
                     // Flush to ensure data is sent
                     stream_guard.flush().await?;
-                    
+
                     Ok(())
                 }
                 Err(e) => {
@@ -401,14 +392,14 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter() {
         let pool = ConnectionPool::new(100, 300);
-        
+
         // Test rate limiting
         let can_send1 = pool.check_rate_limit("peer1", 2).await.unwrap();
         assert!(can_send1);
-        
+
         let can_send2 = pool.check_rate_limit("peer1", 2).await.unwrap();
         assert!(can_send2);
-        
+
         let can_send3 = pool.check_rate_limit("peer1", 2).await.unwrap();
         assert!(!can_send3); // Should be rate limited
     }
@@ -416,15 +407,17 @@ mod tests {
     #[tokio::test]
     async fn test_backoff_state_operations() {
         let pool = ConnectionPool::new(100, 300);
-        
+
         let backoff = BackoffState::new(300);
-        pool.update_backoff_state("peer1".to_string(), backoff).await.unwrap();
-        
+        pool.update_backoff_state("peer1".to_string(), backoff)
+            .await
+            .unwrap();
+
         let retrieved = pool.get_backoff_state("peer1").await.unwrap();
         assert_eq!(retrieved.current_delay_secs, 1);
-        
+
         pool.reset_backoff_state("peer1").await.unwrap();
-        
+
         let after_reset = pool.get_backoff_state("peer1").await;
         assert!(after_reset.is_none());
     }
@@ -447,10 +440,12 @@ mod tests {
     async fn test_clear_all() {
         let pool = ConnectionPool::new(100, 300);
         let backoff = BackoffState::new(300);
-        pool.update_backoff_state("peer1".to_string(), backoff).await.unwrap();
-        
+        pool.update_backoff_state("peer1".to_string(), backoff)
+            .await
+            .unwrap();
+
         pool.clear_all().await.unwrap();
-        
+
         assert_eq!(pool.get_connection_count().await, 0);
     }
 

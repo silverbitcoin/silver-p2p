@@ -238,7 +238,10 @@ impl ConnectionLimiter {
         let current = self.current_connections.load(Ordering::SeqCst) as usize;
 
         if current >= self.max_connections {
-            return Err(P2PError::ConnectionLimitReached(current, self.max_connections));
+            return Err(P2PError::ConnectionLimitReached(
+                current,
+                self.max_connections,
+            ));
         }
 
         self.current_connections.fetch_add(1, Ordering::SeqCst);

@@ -42,10 +42,9 @@ impl TcpConnectionManager {
     /// Accept an incoming connection
     pub async fn accept_connection(&self) -> Result<(TcpStream, SocketAddr)> {
         if let Some(listener) = &self.listener {
-            let (stream, addr) = listener
-                .accept()
-                .await
-                .map_err(|e| P2PError::ConnectionError(format!("Failed to accept connection: {}", e)))?;
+            let (stream, addr) = listener.accept().await.map_err(|e| {
+                P2PError::ConnectionError(format!("Failed to accept connection: {}", e))
+            })?;
 
             debug!("Accepted incoming connection from {}", addr);
             Ok((stream, addr))
@@ -96,9 +95,9 @@ impl TcpConnectionManager {
     /// Get the listener's local address
     pub fn local_addr(&self) -> Result<SocketAddr> {
         if let Some(listener) = &self.listener {
-            listener
-                .local_addr()
-                .map_err(|e| P2PError::ConnectionError(format!("Failed to get local address: {}", e)))
+            listener.local_addr().map_err(|e| {
+                P2PError::ConnectionError(format!("Failed to get local address: {}", e))
+            })
         } else {
             Err(P2PError::ConnectionError(
                 "Listener not started".to_string(),
@@ -160,10 +159,7 @@ impl ConnectionEstablisher {
                     );
                 }
                 Err(_) => {
-                    warn!(
-                        "Connection attempt {} to {} timed out",
-                        attempt, peer_addr
-                    );
+                    warn!("Connection attempt {} to {} timed out", attempt, peer_addr);
                 }
             }
 
@@ -219,7 +215,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tcp_connection_manager_creation() {
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         let manager = TcpConnectionManager::new(addr, 30);
         assert_eq!(manager.listen_addr, addr);
         assert_eq!(manager.connection_timeout_secs, 30);
@@ -248,7 +244,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_socket_addr_parsing() {
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         assert_eq!(addr.port(), 9000);
     }
 
@@ -286,7 +282,7 @@ mod tests {
         let establisher = ConnectionEstablisher::new(1, 300);
         // Try to connect to an invalid address (should timeout)
         let result = establisher
-            .establish_single("127.0.0.1:1".parse().unwrap())
+            .establish_single("127.0.0.1:1".parse().map_err(|e| format!("Parse failed: {}", e))?)
             .await;
 
         // Should fail with timeout or connection error
@@ -295,7 +291,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tcp_manager_timeout_config() {
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         let manager = TcpConnectionManager::new(addr, 30);
 
         // Verify timeout is set correctly
@@ -309,7 +305,7 @@ mod tests {
 
         // Try to connect with max attempts
         let result = establisher
-            .establish_with_retry("127.0.0.1:1".parse().unwrap(), max_attempts)
+            .establish_with_retry("127.0.0.1:1".parse().map_err(|e| format!("Parse failed: {}", e))?, max_attempts)
             .await;
 
         // Should fail after max attempts
@@ -333,7 +329,7 @@ mod tests {
         let establisher = ConnectionEstablisher::new(1, 300);
         // Try to connect to an invalid address
         let result = establisher
-            .establish_single("127.0.0.1:1".parse().unwrap())
+            .establish_single("127.0.0.1:1".parse().map_err(|e| format!("Parse failed: {}", e))?)
             .await;
 
         // Should fail immediately without retry
@@ -342,7 +338,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tcp_listener_address_parsing() {
-        let addr: SocketAddr = "0.0.0.0:9000".parse().unwrap();
+        let addr: SocketAddr = "0.0.0.0:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         let manager = TcpConnectionManager::new(addr, 30);
         assert_eq!(manager.listen_addr.port(), 9000);
     }

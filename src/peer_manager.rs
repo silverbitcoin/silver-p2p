@@ -1,7 +1,7 @@
 //! Peer management and discovery
 
 use crate::error::{P2PError, Result};
-use crate::types::{PeerState, NodeRole};
+use crate::types::{NodeRole, PeerState};
 use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -30,11 +30,15 @@ impl PeerManager {
     /// Add a new peer to the peer list
     pub async fn add_peer(&self, peer_id: String, addr: String, role: NodeRole) -> Result<()> {
         if peer_id.is_empty() {
-            return Err(P2PError::InvalidPeerAddress("peer_id cannot be empty".to_string()));
+            return Err(P2PError::InvalidPeerAddress(
+                "peer_id cannot be empty".to_string(),
+            ));
         }
 
         if addr.is_empty() {
-            return Err(P2PError::InvalidPeerAddress("address cannot be empty".to_string()));
+            return Err(P2PError::InvalidPeerAddress(
+                "address cannot be empty".to_string(),
+            ));
         }
 
         let peer = PeerState::new(peer_id.clone(), addr.clone(), role);
@@ -97,18 +101,12 @@ impl PeerManager {
 
     /// Get count of currently connected peers
     pub async fn get_connected_peer_count(&self) -> usize {
-        self.peers
-            .iter()
-            .filter(|p| p.value().is_connected)
-            .count()
+        self.peers.iter().filter(|p| p.value().is_connected).count()
     }
 
     /// Get count of healthy peers
     pub async fn get_healthy_peer_count(&self) -> usize {
-        self.peers
-            .iter()
-            .filter(|p| p.value().is_healthy)
-            .count()
+        self.peers.iter().filter(|p| p.value().is_healthy).count()
     }
 
     /// Mark peer as connected
@@ -129,7 +127,10 @@ impl PeerManager {
             peer.is_connected = false;
             debug!("Marked peer as disconnected: {}", peer_id);
         } else {
-            warn!("Attempted to mark unknown peer as disconnected: {}", peer_id);
+            warn!(
+                "Attempted to mark unknown peer as disconnected: {}",
+                peer_id
+            );
         }
         Ok(())
     }
@@ -295,7 +296,10 @@ impl PeerManager {
     pub async fn record_successful_ping(&self, peer_id: &str) -> Result<()> {
         if let Some(mut peer) = self.peers.get_mut(peer_id) {
             peer.record_successful_ping();
-            debug!("Recorded successful ping for peer: {} (health_score: {})", peer_id, peer.health_score);
+            debug!(
+                "Recorded successful ping for peer: {} (health_score: {})",
+                peer_id, peer.health_score
+            );
         } else {
             warn!("Attempted to record ping for unknown peer: {}", peer_id);
         }
@@ -306,15 +310,24 @@ impl PeerManager {
     pub async fn record_failed_ping(&self, peer_id: &str) -> Result<()> {
         if let Some(mut peer) = self.peers.get_mut(peer_id) {
             peer.record_failed_ping();
-            debug!("Recorded failed ping for peer: {} (health_score: {})", peer_id, peer.health_score);
-            
+            debug!(
+                "Recorded failed ping for peer: {} (health_score: {})",
+                peer_id, peer.health_score
+            );
+
             // If health score drops below threshold, mark as unhealthy
             if peer.is_below_unhealthy_threshold() {
                 peer.is_healthy = false;
-                warn!("Peer {} health score below threshold: {}", peer_id, peer.health_score);
+                warn!(
+                    "Peer {} health score below threshold: {}",
+                    peer_id, peer.health_score
+                );
             }
         } else {
-            warn!("Attempted to record failed ping for unknown peer: {}", peer_id);
+            warn!(
+                "Attempted to record failed ping for unknown peer: {}",
+                peer_id
+            );
         }
         Ok(())
     }
@@ -370,7 +383,10 @@ impl PeerManager {
             peer.is_healthy = true;
             debug!("Reset health score for peer: {}", peer_id);
         } else {
-            warn!("Attempted to reset health score for unknown peer: {}", peer_id);
+            warn!(
+                "Attempted to reset health score for unknown peer: {}",
+                peer_id
+            );
         }
         Ok(())
     }
@@ -633,10 +649,7 @@ mod tests {
     #[tokio::test]
     async fn test_process_peer_list_response() {
         let pm = PeerManager::new(1000);
-        let peer_list = vec![
-            "127.0.0.1:9001".to_string(),
-            "127.0.0.1:9002".to_string(),
-        ];
+        let peer_list = vec!["127.0.0.1:9001".to_string(), "127.0.0.1:9002".to_string()];
 
         pm.process_peer_list_response(peer_list).await.unwrap();
         assert_eq!(pm.get_candidate_count().await, 2);

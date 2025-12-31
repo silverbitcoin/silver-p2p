@@ -325,7 +325,10 @@ impl BootstrapConnector {
     }
 
     /// Get connection attempt history for a bootstrap node
-    pub async fn get_bootstrap_attempt_history(&self, address: &str) -> Option<BootstrapNodeAttempt> {
+    pub async fn get_bootstrap_attempt_history(
+        &self,
+        address: &str,
+    ) -> Option<BootstrapNodeAttempt> {
         let attempts = self.bootstrap_attempts.read().await;
         attempts.get(address).cloned()
     }
@@ -354,7 +357,8 @@ impl BootstrapConnector {
 
             // Update stats
             let mut stats = self.stats.write().await;
-            stats.connected_bootstrap_nodes = attempts.iter().filter(|(_, a)| a.is_connected).count();
+            stats.connected_bootstrap_nodes =
+                attempts.iter().filter(|(_, a)| a.is_connected).count();
 
             Ok(())
         } else {
@@ -415,7 +419,11 @@ impl BootstrapConnector {
     pub async fn get_bootstrap_health(&self, address: &str) -> Result<(bool, u32, u64)> {
         let attempts = self.bootstrap_attempts.read().await;
         if let Some(attempt) = attempts.get(address) {
-            Ok((attempt.is_connected, attempt.failure_count, attempt.successful_connections))
+            Ok((
+                attempt.is_connected,
+                attempt.failure_count,
+                attempt.successful_connections,
+            ))
         } else {
             Err(P2PError::NetworkError(format!(
                 "Bootstrap node not found: {}",
@@ -463,10 +471,7 @@ mod tests {
     #[tokio::test]
     async fn test_bootstrap_status() {
         let mut config = NetworkConfig::new("node1".to_string(), NodeRole::Validator);
-        config.bootstrap_nodes = vec![
-            "127.0.0.1:9000".to_string(),
-            "127.0.0.1:9001".to_string(),
-        ];
+        config.bootstrap_nodes = vec!["127.0.0.1:9000".to_string(), "127.0.0.1:9001".to_string()];
 
         let peer_manager = Arc::new(PeerManager::new(1000));
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
@@ -497,7 +502,9 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let history = connector.get_bootstrap_attempt_history("127.0.0.1:9000").await;
+        let history = connector
+            .get_bootstrap_attempt_history("127.0.0.1:9000")
+            .await;
         assert!(history.is_some());
         assert_eq!(history.unwrap().address, "127.0.0.1:9000");
 
@@ -525,9 +532,14 @@ mod tests {
             }
         }
 
-        assert!(connector.reset_bootstrap_failures("127.0.0.1:9000").await.is_ok());
+        assert!(connector
+            .reset_bootstrap_failures("127.0.0.1:9000")
+            .await
+            .is_ok());
 
-        let history = connector.get_bootstrap_attempt_history("127.0.0.1:9000").await;
+        let history = connector
+            .get_bootstrap_attempt_history("127.0.0.1:9000")
+            .await;
         assert_eq!(history.unwrap().failure_count, 0);
 
         connector.stop().await.unwrap();
@@ -554,9 +566,14 @@ mod tests {
             }
         }
 
-        assert!(connector.mark_bootstrap_disconnected("127.0.0.1:9000").await.is_ok());
+        assert!(connector
+            .mark_bootstrap_disconnected("127.0.0.1:9000")
+            .await
+            .is_ok());
 
-        let history = connector.get_bootstrap_attempt_history("127.0.0.1:9000").await;
+        let history = connector
+            .get_bootstrap_attempt_history("127.0.0.1:9000")
+            .await;
         assert!(!history.unwrap().is_connected);
 
         connector.stop().await.unwrap();
@@ -565,10 +582,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_failed_bootstrap_nodes() {
         let mut config = NetworkConfig::new("node1".to_string(), NodeRole::Validator);
-        config.bootstrap_nodes = vec![
-            "127.0.0.1:9000".to_string(),
-            "127.0.0.1:9001".to_string(),
-        ];
+        config.bootstrap_nodes = vec!["127.0.0.1:9000".to_string(), "127.0.0.1:9001".to_string()];
 
         let peer_manager = Arc::new(PeerManager::new(1000));
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
@@ -599,10 +613,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_connected_bootstrap_nodes() {
         let mut config = NetworkConfig::new("node1".to_string(), NodeRole::Validator);
-        config.bootstrap_nodes = vec![
-            "127.0.0.1:9000".to_string(),
-            "127.0.0.1:9001".to_string(),
-        ];
+        config.bootstrap_nodes = vec!["127.0.0.1:9000".to_string(), "127.0.0.1:9001".to_string()];
 
         let peer_manager = Arc::new(PeerManager::new(1000));
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
@@ -691,16 +702,28 @@ mod tests {
             }
         }
 
-        let before = connector.get_bootstrap_attempt_history("127.0.0.1:9000").await;
+        let before = connector
+            .get_bootstrap_attempt_history("127.0.0.1:9000")
+            .await;
         let before_time = before.unwrap().last_attempt;
 
-        assert!(connector.trigger_bootstrap_connection("127.0.0.1:9000").await.is_ok());
+        assert!(connector
+            .trigger_bootstrap_connection("127.0.0.1:9000")
+            .await
+            .is_ok());
 
-        let after = connector.get_bootstrap_attempt_history("127.0.0.1:9000").await;
+        let after = connector
+            .get_bootstrap_attempt_history("127.0.0.1:9000")
+            .await;
         let after_time = after.unwrap().last_attempt;
 
         // After should be later than before (trigger sets it to 1000 seconds in the past, before was 2000 seconds in the past)
-        assert!(after_time > before_time, "after_time {:?} should be > before_time {:?}", after_time, before_time);
+        assert!(
+            after_time > before_time,
+            "after_time {:?} should be > before_time {:?}",
+            after_time,
+            before_time
+        );
 
         connector.stop().await.unwrap();
     }

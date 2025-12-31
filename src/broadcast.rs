@@ -5,12 +5,12 @@ use crate::error::{P2PError, Result};
 use crate::message_handler::MessageHandler;
 use crate::peer_manager::PeerManager;
 use crate::types::NetworkMessage;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use tokio::task::JoinSet;
 use tokio::time::{timeout, Duration};
-use tokio::io::AsyncWriteExt;
-use tracing::{debug, warn, info};
+use tracing::{debug, info, warn};
 
 /// Broadcast result with detailed information
 #[derive(Clone, Debug)]
@@ -310,23 +310,29 @@ impl BroadcastManager {
         let send_future = async {
             // Write to the stream using proper async write
             // The stream is behind an Arc<Mutex<TcpStream>> for thread-safe access
-            
+
             let mut stream_guard = stream.lock().await;
-            
+
             // Write the message data to the stream
             stream_guard.write_all(msg_data).await?;
-            
+
             // Flush to ensure data is sent immediately
             stream_guard.flush().await?;
-            
+
             Ok::<(), P2PError>(())
         };
 
         match timeout(Duration::from_secs(timeout_secs), send_future).await {
             Ok(Ok(())) => {
                 // Record metrics
-                let _ = connection_pool.record_sent(peer_id, msg_data.len() as u64).await;
-                debug!("Successfully sent {} bytes to peer: {}", msg_data.len(), peer_id);
+                let _ = connection_pool
+                    .record_sent(peer_id, msg_data.len() as u64)
+                    .await;
+                debug!(
+                    "Successfully sent {} bytes to peer: {}",
+                    msg_data.len(),
+                    peer_id
+                );
                 Ok(())
             }
             Ok(Err(e)) => Err(e),
@@ -431,13 +437,8 @@ mod tests {
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
         let message_handler = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        let broadcast_mgr = BroadcastManager::new(
-            peer_manager,
-            connection_pool,
-            message_handler,
-            5,
-            10,
-        );
+        let broadcast_mgr =
+            BroadcastManager::new(peer_manager, connection_pool, message_handler, 5, 10);
 
         assert_eq!(broadcast_mgr.broadcast_timeout_secs, 5);
         assert_eq!(broadcast_mgr.max_concurrent_broadcasts, 10);
@@ -449,13 +450,8 @@ mod tests {
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
         let message_handler = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        let broadcast_mgr = BroadcastManager::new(
-            peer_manager,
-            connection_pool,
-            message_handler,
-            5,
-            10,
-        );
+        let broadcast_mgr =
+            BroadcastManager::new(peer_manager, connection_pool, message_handler, 5, 10);
 
         let msg = NetworkMessage::Ping { nonce: 123 };
         let result = broadcast_mgr.broadcast(msg).await.unwrap();
@@ -471,16 +467,14 @@ mod tests {
         let connection_pool = Arc::new(ConnectionPool::new(100, 300));
         let message_handler = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        let broadcast_mgr = BroadcastManager::new(
-            peer_manager,
-            connection_pool,
-            message_handler,
-            5,
-            10,
-        );
+        let broadcast_mgr =
+            BroadcastManager::new(peer_manager, connection_pool, message_handler, 5, 10);
 
         let msg = NetworkMessage::Ping { nonce: 123 };
-        let result = broadcast_mgr.broadcast_to_peers(msg, Vec::new()).await.unwrap();
+        let result = broadcast_mgr
+            .broadcast_to_peers(msg, Vec::new())
+            .await
+            .unwrap();
 
         assert_eq!(result.total_peers, 0);
         assert_eq!(result.successful_sends, 0);
@@ -510,10 +504,7 @@ mod tests {
             .await
             .unwrap();
 
-        peer_manager
-            .mark_connected("peer1")
-            .await
-            .unwrap();
+        peer_manager.mark_connected("peer1").await.unwrap();
 
         let stats = broadcast_mgr.get_broadcast_stats().await;
         assert_eq!(stats.connected_peers, 1);

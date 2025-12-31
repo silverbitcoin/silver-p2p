@@ -2,9 +2,9 @@
 
 use crate::error::{P2PError, Result};
 use dashmap::DashMap;
-use std::sync::Arc;
-use std::time::{SystemTime, Duration};
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 use tracing::{debug, warn};
 
 /// Chunk size for large messages (10 MB)
@@ -62,15 +62,17 @@ impl IncompleteMessage {
     /// Add a chunk to the message
     fn add_chunk(&mut self, chunk_index: u32, data: Vec<u8>) -> Result<()> {
         if chunk_index >= self.total_chunks {
-            return Err(P2PError::InvalidMessageFormat(
-                format!("Invalid chunk index: {} (total: {})", chunk_index, self.total_chunks),
-            ));
+            return Err(P2PError::InvalidMessageFormat(format!(
+                "Invalid chunk index: {} (total: {})",
+                chunk_index, self.total_chunks
+            )));
         }
 
         if self.chunks.contains_key(&chunk_index) {
-            return Err(P2PError::InvalidMessageFormat(
-                format!("Duplicate chunk index: {}", chunk_index),
-            ));
+            return Err(P2PError::InvalidMessageFormat(format!(
+                "Duplicate chunk index: {}",
+                chunk_index
+            )));
         }
 
         self.chunks.insert(chunk_index, data);
@@ -90,13 +92,11 @@ impl IncompleteMessage {
     /// Reassemble the complete message
     fn reassemble(&self) -> Result<Vec<u8>> {
         if !self.is_complete() {
-            return Err(P2PError::InvalidMessageFormat(
-                format!(
-                    "Incomplete message: {}/{} chunks received",
-                    self.chunks.len(),
-                    self.total_chunks
-                ),
-            ));
+            return Err(P2PError::InvalidMessageFormat(format!(
+                "Incomplete message: {}/{} chunks received",
+                self.chunks.len(),
+                self.total_chunks
+            )));
         }
 
         let mut result = Vec::with_capacity(self.total_size as usize);
@@ -105,20 +105,19 @@ impl IncompleteMessage {
             if let Some(chunk) = self.chunks.get(&i) {
                 result.extend_from_slice(chunk);
             } else {
-                return Err(P2PError::InvalidMessageFormat(
-                    format!("Missing chunk: {}", i),
-                ));
+                return Err(P2PError::InvalidMessageFormat(format!(
+                    "Missing chunk: {}",
+                    i
+                )));
             }
         }
 
         if result.len() != self.total_size as usize {
-            return Err(P2PError::InvalidMessageFormat(
-                format!(
-                    "Reassembled message size mismatch: {} (expected: {})",
-                    result.len(),
-                    self.total_size
-                ),
-            ));
+            return Err(P2PError::InvalidMessageFormat(format!(
+                "Reassembled message size mismatch: {} (expected: {})",
+                result.len(),
+                self.total_size
+            )));
         }
 
         Ok(result)
@@ -209,12 +208,10 @@ impl MessageChunker {
         }
 
         if chunk.metadata.chunk_index >= chunk.metadata.total_chunks {
-            return Err(P2PError::InvalidMessageFormat(
-                format!(
-                    "Invalid chunk index: {} (total: {})",
-                    chunk.metadata.chunk_index, chunk.metadata.total_chunks
-                ),
-            ));
+            return Err(P2PError::InvalidMessageFormat(format!(
+                "Invalid chunk index: {} (total: {})",
+                chunk.metadata.chunk_index, chunk.metadata.total_chunks
+            )));
         }
 
         // Get or create incomplete message
@@ -314,9 +311,8 @@ impl MessageChunker {
 
     /// Clear all incomplete messages for a peer
     pub async fn clear_peer_messages(&self, peer_id: &str) {
-        self.incomplete_messages.retain(|key, _| {
-            !key.starts_with(&format!("{}:", peer_id))
-        });
+        self.incomplete_messages
+            .retain(|key, _| !key.starts_with(&format!("{}:", peer_id)));
     }
 }
 
@@ -513,8 +509,14 @@ mod tests {
         chunker.add_chunk("peer1", chunks[1].clone()).await.unwrap();
 
         // Add chunks from peer2
-        chunker.add_chunk("peer2", chunks2[0].clone()).await.unwrap();
-        chunker.add_chunk("peer2", chunks2[1].clone()).await.unwrap();
+        chunker
+            .add_chunk("peer2", chunks2[0].clone())
+            .await
+            .unwrap();
+        chunker
+            .add_chunk("peer2", chunks2[1].clone())
+            .await
+            .unwrap();
 
         // Complete peer1
         let result = chunker.add_chunk("peer1", chunks[2].clone()).await;

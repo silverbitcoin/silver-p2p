@@ -250,7 +250,9 @@ impl ShutdownCoordinator {
         loop {
             // Check if there are any pending operations
             let peers = self.peer_manager.get_all_peers().await;
-            let has_pending = peers.iter().any(|p| p.messages_sent > 0 || p.messages_received > 0);
+            let has_pending = peers
+                .iter()
+                .any(|p| p.messages_sent > 0 || p.messages_received > 0);
 
             if !has_pending {
                 debug!("No pending messages detected");
@@ -324,7 +326,7 @@ impl ShutdownCoordinator {
     /// Release network resources
     async fn release_resources(&self) {
         debug!("Releasing network resources");
-        
+
         // Close all active peer connections through peer manager
         let peers = self.peer_manager.get_all_peers().await;
         for peer in peers {
@@ -332,16 +334,16 @@ impl ShutdownCoordinator {
             let _ = self.peer_manager.mark_disconnected(&peer.peer_id).await;
             let _ = self.connection_pool.remove_connection(&peer.peer_id).await;
         }
-        
+
         // Clear all connections in the connection pool
         let _ = self.connection_pool.clear_all().await;
-        
+
         // Stop discovery coordinator
         let _ = self.discovery_coordinator.stop().await;
-        
+
         // Stop bootstrap connector
         let _ = self.bootstrap_connector.stop().await;
-        
+
         info!("Network resources released successfully");
     }
 
@@ -617,7 +619,11 @@ mod tests {
             .unwrap();
 
         // Mark one as connected
-        coordinator.peer_manager.mark_connected("peer1").await.unwrap();
+        coordinator
+            .peer_manager
+            .mark_connected("peer1")
+            .await
+            .unwrap();
 
         // Mark one as unhealthy
         coordinator

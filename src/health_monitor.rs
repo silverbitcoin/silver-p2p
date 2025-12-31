@@ -1,15 +1,15 @@
 //! Peer health monitoring with ping-pong protocol
 
-use crate::error::Result;
-use crate::peer_manager::PeerManager;
 use crate::connection_pool::ConnectionPool;
+use crate::error::Result;
 use crate::message_handler::MessageHandler;
-use crate::types::{NetworkMessage, HealthStatus};
+use crate::peer_manager::PeerManager;
+use crate::types::{HealthStatus, NetworkMessage};
+use dashmap::DashMap;
 use std::sync::Arc;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
 use tokio::time::interval;
 use tracing::{info, warn};
-use dashmap::DashMap;
 
 /// Monitors peer health and detects unresponsive peers
 pub struct HealthMonitor {
@@ -139,7 +139,8 @@ impl HealthMonitor {
         let _conn = self.connection_pool.get_connection(peer_id).await?;
 
         // Track the pending ping
-        self.pending_pings.insert(peer_id.to_string(), (nonce, SystemTime::now()));
+        self.pending_pings
+            .insert(peer_id.to_string(), (nonce, SystemTime::now()));
         info!("Sent ping to peer: {} (nonce: {})", peer_id, nonce);
 
         Ok(())
@@ -157,7 +158,10 @@ impl HealthMonitor {
                         .await?;
                     // Record successful ping - increases health score
                     self.peer_manager.record_successful_ping(peer_id).await?;
-                    info!("Received pong from peer: {} (latency: {}ms)", peer_id, latency_ms);
+                    info!(
+                        "Received pong from peer: {} (latency: {}ms)",
+                        peer_id, latency_ms
+                    );
                 }
             } else {
                 warn!("Nonce mismatch for peer: {}", peer_id);
@@ -261,7 +265,13 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         monitor.handle_pong("peer1", 123).await.ok();
@@ -275,7 +285,7 @@ mod tests {
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let status = monitor.get_health_status().await;
-        
+
         assert_eq!(status.connected_peers, 0);
         assert_eq!(status.total_peers, 0);
         assert!(!status.is_healthy);
@@ -288,18 +298,30 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        pm.add_peer("peer2".to_string(), "127.0.0.1:9001".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+        pm.add_peer(
+            "peer2".to_string(),
+            "127.0.0.1:9001".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+
         pm.mark_connected("peer1").await.unwrap();
         pm.mark_connected("peer2").await.unwrap();
-        
+
         pm.update_peer_metrics("peer1", 50, 0, 0).await.unwrap();
         pm.update_peer_metrics("peer2", 100, 0, 0).await.unwrap();
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let status = monitor.get_health_status().await;
-        
+
         assert_eq!(status.connected_peers, 2);
         assert_eq!(status.total_peers, 2);
         assert!(status.is_healthy);
@@ -312,12 +334,18 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
         pm.update_peer_metrics("peer1", 75, 0, 0).await.unwrap();
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let latency = monitor.get_peer_latency("peer1").await.unwrap();
-        
+
         assert_eq!(latency.as_millis(), 75);
     }
 
@@ -327,21 +355,29 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
         pm.mark_connected("peer1").await.unwrap();
 
         let monitor = HealthMonitor::new(pm.clone(), cp, mh, 30, 10, 300);
-        
+
         // Simulate sending a ping
         let nonce = 12345u64;
-        monitor.pending_pings.insert("peer1".to_string(), (nonce, SystemTime::now()));
-        
+        monitor
+            .pending_pings
+            .insert("peer1".to_string(), (nonce, SystemTime::now()));
+
         // Small delay to ensure some latency
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         // Handle pong
         monitor.handle_pong("peer1", nonce).await.unwrap();
-        
+
         // Verify peer is marked healthy
         let peer = pm.get_peer("peer1").await.unwrap();
         assert!(peer.is_healthy);
@@ -354,16 +390,24 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
-        
+
         // Simulate sending a ping with nonce 123
-        monitor.pending_pings.insert("peer1".to_string(), (123u64, SystemTime::now()));
-        
+        monitor
+            .pending_pings
+            .insert("peer1".to_string(), (123u64, SystemTime::now()));
+
         // Handle pong with different nonce (456)
         monitor.handle_pong("peer1", 456).await.unwrap();
-        
+
         // Ping should be removed even with nonce mismatch (implementation removes it)
         assert!(!monitor.pending_pings.contains_key("peer1"));
     }
@@ -374,17 +418,25 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
         pm.mark_connected("peer1").await.unwrap();
-        
+
         // Update metrics with messages and bytes (multiple times to accumulate)
         for _ in 0..30 {
-            pm.update_peer_metrics("peer1", 50, 1024, 2048).await.unwrap();
+            pm.update_peer_metrics("peer1", 50, 1024, 2048)
+                .await
+                .unwrap();
         }
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let status = monitor.get_health_status().await;
-        
+
         assert_eq!(status.connected_peers, 1);
         // With 30 messages sent and ping_interval of 30 seconds, messages_per_sec should be 1
         assert_eq!(status.messages_per_sec, 1);
@@ -397,21 +449,29 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
         pm.mark_connected("peer1").await.unwrap();
 
         let monitor = HealthMonitor::new(pm.clone(), cp, mh, 30, 10, 300);
-        
+
         // Simulate sending a ping
         let nonce = 12345u64;
-        monitor.pending_pings.insert("peer1".to_string(), (nonce, SystemTime::now()));
-        
+        monitor
+            .pending_pings
+            .insert("peer1".to_string(), (nonce, SystemTime::now()));
+
         // Small delay to ensure some latency
         tokio::time::sleep(Duration::from_millis(10)).await;
-        
+
         // Handle pong - should increase health score
         monitor.handle_pong("peer1", nonce).await.unwrap();
-        
+
         // Verify health score increased
         let score = pm.get_health_score("peer1").await.unwrap();
         assert_eq!(score, 100); // Already at max
@@ -423,19 +483,28 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
         pm.mark_connected("peer1").await.unwrap();
 
         let monitor = HealthMonitor::new(pm.clone(), cp, mh, 30, 10, 300);
-        
+
         // Simulate sending a ping
         let nonce = 12345u64;
-        monitor.pending_pings.insert("peer1".to_string(), (nonce, SystemTime::now() - Duration::from_secs(15)));
-        
+        monitor.pending_pings.insert(
+            "peer1".to_string(),
+            (nonce, SystemTime::now() - Duration::from_secs(15)),
+        );
+
         // Manually trigger timeout check
         let now = SystemTime::now();
         let timeout_duration = Duration::from_secs(10);
-        
+
         for entry in monitor.pending_pings.iter() {
             let (peer_id, (_, sent_time)) = entry.pair();
             if let Ok(elapsed) = now.duration_since(*sent_time) {
@@ -444,7 +513,7 @@ mod tests {
                 }
             }
         }
-        
+
         // Verify health score decreased
         let score = pm.get_health_score("peer1").await.unwrap();
         assert_eq!(score, 90);
@@ -456,11 +525,17 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let score = monitor.get_peer_health_score("peer1").await.unwrap();
-        
+
         assert_eq!(score, 100);
     }
 
@@ -470,8 +545,20 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        pm.add_peer("peer2".to_string(), "127.0.0.1:9001".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+        pm.add_peer(
+            "peer2".to_string(),
+            "127.0.0.1:9001".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         // Simulate failures for peer2
         for _ in 0..3 {
@@ -480,7 +567,7 @@ mod tests {
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let peers = monitor.get_peers_by_health_score().await;
-        
+
         assert_eq!(peers.len(), 2);
         assert_eq!(peers[0].peer_id, "peer1"); // Higher score
         assert_eq!(peers[1].peer_id, "peer2"); // Lower score
@@ -492,8 +579,20 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        pm.add_peer("peer2".to_string(), "127.0.0.1:9001".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+        pm.add_peer(
+            "peer2".to_string(),
+            "127.0.0.1:9001".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         // Simulate failures for peer2 to drop below 50
         for _ in 0..6 {
@@ -502,7 +601,7 @@ mod tests {
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let healthy = monitor.get_healthy_peers_by_score().await;
-        
+
         assert_eq!(healthy.len(), 1);
         assert_eq!(healthy[0].peer_id, "peer1");
     }
@@ -513,8 +612,20 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        pm.add_peer("peer2".to_string(), "127.0.0.1:9001".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+        pm.add_peer(
+            "peer2".to_string(),
+            "127.0.0.1:9001".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         // Simulate failures for peer2 to drop below 30
         for _ in 0..8 {
@@ -523,7 +634,7 @@ mod tests {
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let unhealthy = monitor.get_unhealthy_peers_by_score().await;
-        
+
         assert_eq!(unhealthy.len(), 1);
         assert_eq!(unhealthy[0].peer_id, "peer2");
     }
@@ -534,8 +645,20 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
-        pm.add_peer("peer2".to_string(), "127.0.0.1:9001".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
+        pm.add_peer(
+            "peer2".to_string(),
+            "127.0.0.1:9001".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         // Simulate failures for peer2
         for _ in 0..2 {
@@ -544,7 +667,7 @@ mod tests {
 
         let monitor = HealthMonitor::new(pm, cp, mh, 30, 10, 300);
         let avg = monitor.get_average_health_score().await;
-        
+
         // peer1: 100, peer2: 80, average: 90
         assert_eq!(avg, 90);
     }
@@ -555,7 +678,13 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         // Simulate failures
         for _ in 0..5 {
@@ -563,7 +692,7 @@ mod tests {
         }
 
         let monitor = HealthMonitor::new(pm.clone(), cp, mh, 30, 10, 300);
-        
+
         let score_before = monitor.get_peer_health_score("peer1").await.unwrap();
         assert_eq!(score_before, 50);
 
@@ -580,23 +709,29 @@ mod tests {
         let cp = Arc::new(ConnectionPool::new(100, 300));
         let mh = Arc::new(MessageHandler::new(100 * 1024 * 1024));
 
-        pm.add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), crate::types::NodeRole::Validator).await.unwrap();
+        pm.add_peer(
+            "peer1".to_string(),
+            "127.0.0.1:9000".to_string(),
+            crate::types::NodeRole::Validator,
+        )
+        .await
+        .unwrap();
 
         let monitor = HealthMonitor::new(pm.clone(), cp, mh, 30, 10, 300);
-        
+
         // Simulate failures to drop score to 50
         for _ in 0..5 {
             pm.record_failed_ping("peer1").await.unwrap();
         }
-        
+
         let score = monitor.get_peer_health_score("peer1").await.unwrap();
         assert_eq!(score, 50);
-        
+
         // Now simulate successful pings to recover
         for _ in 0..5 {
             pm.record_successful_ping("peer1").await.unwrap();
         }
-        
+
         let score = monitor.get_peer_health_score("peer1").await.unwrap();
         assert_eq!(score, 75);
     }

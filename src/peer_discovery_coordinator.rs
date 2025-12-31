@@ -5,7 +5,7 @@ use crate::connection_pool::ConnectionPool;
 use crate::error::{P2PError, Result};
 use crate::message_handler::MessageHandler;
 use crate::peer_manager::PeerManager;
-use crate::types::{NodeRole, NetworkMessage};
+use crate::types::{NetworkMessage, NodeRole};
 use crate::unicast::UnicastManager;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -67,7 +67,8 @@ pub struct PeerDiscoveryCoordinator {
     /// Network configuration
     config: NetworkConfig,
     /// Tracks candidate connection attempts
-    pub candidate_attempts: Arc<RwLock<std::collections::HashMap<String, CandidateConnectionAttempt>>>,
+    pub candidate_attempts:
+        Arc<RwLock<std::collections::HashMap<String, CandidateConnectionAttempt>>>,
     /// Whether discovery is running
     is_running: Arc<AtomicBool>,
     /// Statistics
@@ -124,22 +125,25 @@ impl PeerDiscoveryCoordinator {
 
         // Send PeerListRequest message
         let msg = NetworkMessage::PeerListRequest;
-        
+
         match self.unicast_manager.send_to_peer(peer_id, msg).await {
             Ok(_) => {
                 // Update statistics
                 let mut stats = self.stats.write().await;
                 stats.peer_list_requests_sent += 1;
                 stats.last_peer_list_request = Some(SystemTime::now());
-                
+
                 // Update last request time
                 *self.last_peer_list_request_time.write().await = SystemTime::now();
-                
+
                 debug!("Successfully sent peer list request to peer: {}", peer_id);
                 Ok(())
             }
             Err(e) => {
-                warn!("Failed to send peer list request to peer {}: {}", peer_id, e);
+                warn!(
+                    "Failed to send peer list request to peer {}: {}",
+                    peer_id, e
+                );
                 Err(e)
             }
         }
@@ -147,7 +151,10 @@ impl PeerDiscoveryCoordinator {
 
     /// Handle peer list response from a peer
     pub async fn handle_peer_list_response(&self, peer_addresses: Vec<String>) -> Result<()> {
-        debug!("Handling peer list response with {} addresses", peer_addresses.len());
+        debug!(
+            "Handling peer list response with {} addresses",
+            peer_addresses.len()
+        );
 
         // Validate addresses
         let valid_addresses: Vec<String> = peer_addresses
@@ -158,13 +165,13 @@ impl PeerDiscoveryCoordinator {
                     warn!("Invalid peer address format (missing port): {}", addr);
                     return false;
                 }
-                
+
                 // Parse to ensure it's a valid socket address
                 if addr.parse::<std::net::SocketAddr>().is_err() {
                     warn!("Invalid peer address (cannot parse): {}", addr);
                     return false;
                 }
-                
+
                 true
             })
             .collect();
@@ -174,13 +181,18 @@ impl PeerDiscoveryCoordinator {
             return Ok(());
         }
 
-        debug!("Processing {} valid peer addresses from response", valid_addresses.len());
+        debug!(
+            "Processing {} valid peer addresses from response",
+            valid_addresses.len()
+        );
 
         // Count new peers before adding
         let existing_count = self.peer_manager.get_candidate_count().await;
 
         // Add to candidates
-        self.peer_manager.add_candidates(valid_addresses.clone()).await?;
+        self.peer_manager
+            .add_candidates(valid_addresses.clone())
+            .await?;
 
         // Count new peers after adding
         let new_count = self.peer_manager.get_candidate_count().await;
@@ -216,17 +228,17 @@ impl PeerDiscoveryCoordinator {
 
         // Request from a random subset of connected peers (up to 3)
         let request_count = std::cmp::min(3, connected_peers.len());
-        
+
         // Simple shuffle using system time as seed
         let seed = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos() as usize;
-        
+
         for i in 0..request_count {
             let idx = (seed + i) % connected_peers.len();
             let peer = connected_peers[idx];
-            
+
             // Send peer list request
             if let Err(e) = self.request_peer_list(&peer.peer_id).await {
                 warn!("Failed to request peer list from {}: {}", peer.peer_id, e);
@@ -257,7 +269,7 @@ impl PeerDiscoveryCoordinator {
         let mut shutdown_rx = self.shutdown_tx.subscribe();
 
         let unicast_manager = self.unicast_manager.clone();
-        
+
         tokio::spawn(async move {
             let mut discovery_ticker = interval(Duration::from_secs(10));
             let mut peer_list_ticker = interval(Duration::from_secs(30));
@@ -440,7 +452,7 @@ impl PeerDiscoveryCoordinator {
                     _ = peer_list_ticker.tick() => {
                         // Periodically request peer lists from connected peers
                         debug!("Triggering periodic peer list requests");
-                        
+
                         // Get all connected and healthy peers
                         let peers = peer_manager.get_all_peers().await;
                         let connected_peers: Vec<_> = peers
@@ -451,24 +463,24 @@ impl PeerDiscoveryCoordinator {
                         if !connected_peers.is_empty() {
                             // Request from up to 3 random connected peers
                             let request_count = std::cmp::min(3, connected_peers.len());
-                            
+
                             // Use system time as seed for simple randomization
                             let seed = SystemTime::now()
                                 .duration_since(SystemTime::UNIX_EPOCH)
                                 .unwrap_or_default()
                                 .as_nanos() as usize;
-                            
+
                             for i in 0..request_count {
                                 let idx = (seed + i) % connected_peers.len();
                                 let peer = connected_peers[idx];
-                                
+
                                 // Send peer list request
                                 let msg = NetworkMessage::PeerListRequest;
                                 if let Err(e) = unicast_manager.send_to_peer(&peer.peer_id, msg).await {
                                     warn!("Failed to request peer list from {}: {}", peer.peer_id, e);
                                 } else {
                                     debug!("Sent peer list request to peer: {}", peer.peer_id);
-                                    
+
                                     // Update statistics
                                     let mut s = stats.write().await;
                                     s.peer_list_requests_sent += 1;
@@ -524,7 +536,10 @@ impl PeerDiscoveryCoordinator {
     }
 
     /// Get connection attempt history for a candidate
-    pub async fn get_candidate_attempt_history(&self, address: &str) -> Option<CandidateConnectionAttempt> {
+    pub async fn get_candidate_attempt_history(
+        &self,
+        address: &str,
+    ) -> Option<CandidateConnectionAttempt> {
         let attempts = self.candidate_attempts.read().await;
         attempts.get(address).cloned()
     }
@@ -865,7 +880,9 @@ mod tests {
             "192.168.1.3:9000".to_string(),
         ];
 
-        let result = coordinator.handle_peer_list_response(peer_addresses.clone()).await;
+        let result = coordinator
+            .handle_peer_list_response(peer_addresses.clone())
+            .await;
         assert!(result.is_ok());
 
         let stats = coordinator.get_stats().await;
@@ -911,14 +928,20 @@ mod tests {
             "192.168.1.1:9000".to_string(),
             "192.168.1.2:9000".to_string(),
         ];
-        coordinator.handle_peer_list_response(peer_addresses_1).await.unwrap();
+        coordinator
+            .handle_peer_list_response(peer_addresses_1)
+            .await
+            .unwrap();
 
         // Second response with overlapping addresses
         let peer_addresses_2 = vec![
             "192.168.1.2:9000".to_string(), // Duplicate
             "192.168.1.3:9000".to_string(),
         ];
-        coordinator.handle_peer_list_response(peer_addresses_2).await.unwrap();
+        coordinator
+            .handle_peer_list_response(peer_addresses_2)
+            .await
+            .unwrap();
 
         let stats = coordinator.get_stats().await;
         assert_eq!(stats.peer_list_responses_received, 2);
@@ -944,7 +967,10 @@ mod tests {
             "192.168.1.1:9000".to_string(),
             "192.168.1.2:9000".to_string(),
         ];
-        coordinator.handle_peer_list_response(peer_addresses).await.unwrap();
+        coordinator
+            .handle_peer_list_response(peer_addresses)
+            .await
+            .unwrap();
 
         let stats_after = coordinator.get_stats().await;
         assert_eq!(stats_after.peer_list_responses_received, 1);

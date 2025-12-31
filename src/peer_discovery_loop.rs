@@ -249,10 +249,8 @@ impl PeerDiscoveryLoop {
                     )
                     .await;
 
-                    let _connection_time_ms = start_time
-                        .elapsed()
-                        .unwrap_or_default()
-                        .as_millis() as u64;
+                    let _connection_time_ms =
+                        start_time.elapsed().unwrap_or_default().as_millis() as u64;
 
                     {
                         let mut s = stats.write().await;
@@ -265,14 +263,20 @@ impl PeerDiscoveryLoop {
                             debug!("Successfully connected to candidate: {}", candidate_addr);
 
                             // Add to connection pool
-                            if (connection_pool.add_connection(peer_id.clone(), stream).await).is_ok() {
+                            if (connection_pool
+                                .add_connection(peer_id.clone(), stream)
+                                .await)
+                                .is_ok()
+                            {
                                 // Add to peer manager
-                                if (peer_manager.add_peer(
-                                    peer_id.clone(),
-                                    candidate_addr.clone(),
-                                    crate::types::NodeRole::Validator,
-                                )
-                                .await).is_ok()
+                                if (peer_manager
+                                    .add_peer(
+                                        peer_id.clone(),
+                                        candidate_addr.clone(),
+                                        crate::types::NodeRole::Validator,
+                                    )
+                                    .await)
+                                    .is_ok()
                                 {
                                     // Mark as connected
                                     let _ = peer_manager.mark_connected(&peer_id).await;
@@ -406,12 +410,7 @@ impl PeerDiscoveryLoop {
     /// Manually trigger peer list requests
     pub async fn trigger_peer_list_requests(&self) -> Result<()> {
         debug!("Manual peer list requests triggered");
-        Self::request_peer_lists(
-            &self.peer_manager,
-            &self.unicast_manager,
-            &self.stats,
-        )
-        .await
+        Self::request_peer_lists(&self.peer_manager, &self.unicast_manager, &self.stats).await
     }
 }
 

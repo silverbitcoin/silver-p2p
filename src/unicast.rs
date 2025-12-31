@@ -7,7 +7,7 @@ use crate::peer_manager::PeerManager;
 use crate::types::NetworkMessage;
 use std::sync::Arc;
 use tokio::time::{timeout, Duration};
-use tracing::{debug, warn, error};
+use tracing::{debug, error, warn};
 
 /// Handles unicast message sending to specific peers
 pub struct UnicastManager {
@@ -75,13 +75,13 @@ impl UnicastManager {
 
         // Create message with sender header
         let mut message_with_header = Vec::with_capacity(msg_size + self.local_peer_id.len() + 4);
-        
+
         // Add sender peer ID length (4 bytes, little-endian)
         message_with_header.extend_from_slice(&(self.local_peer_id.len() as u32).to_le_bytes());
-        
+
         // Add sender peer ID
         message_with_header.extend_from_slice(self.local_peer_id.as_bytes());
-        
+
         // Add serialized message
         message_with_header.extend_from_slice(&serialized_msg);
 
@@ -91,10 +91,7 @@ impl UnicastManager {
                 // Connection exists, proceed with sending
             }
             Err(e) => {
-                warn!(
-                    "Failed to get connection for peer {}: {}",
-                    peer_id, e
-                );
+                warn!("Failed to get connection for peer {}: {}", peer_id, e);
                 // Mark peer as unhealthy on connection failure
                 let _ = self
                     .peer_manager
@@ -135,10 +132,7 @@ impl UnicastManager {
                 Ok(())
             }
             Ok(Err(e)) => {
-                error!(
-                    "Failed to send message to peer {}: {}",
-                    peer_id, e
-                );
+                error!("Failed to send message to peer {}: {}", peer_id, e);
                 // Mark peer as unhealthy on send failure
                 let _ = self
                     .peer_manager
@@ -156,10 +150,7 @@ impl UnicastManager {
                     .peer_manager
                     .mark_unhealthy(
                         peer_id,
-                        format!(
-                            "Send timeout after {}s",
-                            self.delivery_timeout_secs
-                        ),
+                        format!("Send timeout after {}s", self.delivery_timeout_secs),
                     )
                     .await;
                 Err(P2PError::ConnectionTimeout(format!(
@@ -171,20 +162,14 @@ impl UnicastManager {
     }
 
     /// Internal function to send message to peer
-    async fn send_message_internal(
-        &self,
-        message_data: &[u8],
-        peer_id: &str,
-    ) -> Result<()> {
+    async fn send_message_internal(&self, message_data: &[u8], peer_id: &str) -> Result<()> {
         // Write message to peer connection through connection pool
-        self.connection_pool.write_message(peer_id, message_data).await?;
-        
-        debug!(
-            "Sent {} bytes to peer: {}",
-            message_data.len(),
-            peer_id
-        );
-        
+        self.connection_pool
+            .write_message(peer_id, message_data)
+            .await?;
+
+        debug!("Sent {} bytes to peer: {}", message_data.len(), peer_id);
+
         Ok(())
     }
 
@@ -428,7 +413,7 @@ mod tests {
                 // Expected error for disconnected peer
             }
             other => {
-                assert!(false, "Expected PeerNotFound error, got: {:?}", other);
+                panic!("Expected PeerNotFound error, got: {:?}", other);
             }
         }
     }
@@ -472,7 +457,7 @@ mod tests {
                 // Expected error for unhealthy peer
             }
             other => {
-                assert!(false, "Expected PeerUnhealthy error, got: {:?}", other);
+                panic!("Expected PeerUnhealthy error, got: {:?}", other);
             }
         }
     }

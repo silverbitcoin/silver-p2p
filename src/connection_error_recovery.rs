@@ -1,15 +1,15 @@
 //! Connection error recovery with automatic reconnection scheduling
 
-use crate::error::Result;
 use crate::connection_pool::ConnectionPool;
+use crate::error::Result;
 use crate::peer_manager::PeerManager;
-use crate::reconnection_manager::{ReconnectionManager, ReconnectionEvent};
+use crate::reconnection_manager::{ReconnectionEvent, ReconnectionManager};
 use dashmap::DashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn, info};
+use tracing::{debug, error, info, warn};
 
 /// Connection error types for recovery handling
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,15 +148,16 @@ impl ConnectionErrorRecovery {
         self.error_counts.insert(peer_id.clone(), attempt);
 
         // Record last error
-        self.last_errors.insert(
-            peer_id.clone(),
-            (error_type.clone(), SystemTime::now()),
-        );
+        self.last_errors
+            .insert(peer_id.clone(), (error_type.clone(), SystemTime::now()));
 
         // Log the error with context
         warn!(
             "Connection error for peer {}: {} (attempt: {}, error: {})",
-            peer_id, error_type.description(), attempt, error_message
+            peer_id,
+            error_type.description(),
+            attempt,
+            error_message
         );
 
         // Create error event
@@ -215,10 +216,7 @@ impl ConnectionErrorRecovery {
             .schedule_reconnect(peer_id.clone(), peer_addr)
             .await?;
 
-        info!(
-            "Scheduled reconnection for peer {} with backoff",
-            peer_id
-        );
+        info!("Scheduled reconnection for peer {} with backoff", peer_id);
 
         Ok(())
     }
@@ -271,10 +269,7 @@ impl ConnectionErrorRecovery {
     }
 
     /// Process reconnection event and attempt to reconnect
-    pub async fn process_reconnection_event(
-        &self,
-        event: ReconnectionEvent,
-    ) -> Result<()> {
+    pub async fn process_reconnection_event(&self, event: ReconnectionEvent) -> Result<()> {
         debug!(
             "Processing reconnection event for peer {} (attempt: {})",
             event.peer_id, event.attempt
@@ -331,9 +326,7 @@ impl ConnectionErrorRecovery {
 
     /// Get time until next retry for peer
     pub async fn time_until_retry(&self, peer_id: &str) -> Option<Duration> {
-        self.reconnection_manager
-            .time_until_retry(peer_id)
-            .await
+        self.reconnection_manager.time_until_retry(peer_id).await
     }
 }
 
@@ -406,7 +399,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager.clone(), connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -440,7 +433,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager.clone(), connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -475,7 +468,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -508,7 +501,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -549,8 +542,8 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr1: SocketAddr = "127.0.0.1:9000".parse().unwrap();
-        let addr2: SocketAddr = "127.0.0.1:9001".parse().unwrap();
+        let addr1: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
+        let addr2: SocketAddr = "127.0.0.1:9001".parse().map_err(|e| format!("Parse failed: {}", e))?;
 
         recovery
             .handle_connection_error(
@@ -592,7 +585,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -628,7 +621,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 3);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
 
         // First error
         recovery
@@ -691,8 +684,8 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr1: SocketAddr = "127.0.0.1:9000".parse().unwrap();
-        let addr2: SocketAddr = "127.0.0.1:9001".parse().unwrap();
+        let addr1: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
+        let addr2: SocketAddr = "127.0.0.1:9001".parse().map_err(|e| format!("Parse failed: {}", e))?;
 
         recovery
             .handle_connection_error(
@@ -746,7 +739,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager, connection_pool, 300, 5);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
         recovery
             .handle_connection_error(
                 "peer1".to_string(),
@@ -782,7 +775,7 @@ mod tests {
 
         let recovery = ConnectionErrorRecovery::new(peer_manager.clone(), connection_pool, 300, 2);
 
-        let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?;
 
         // First error
         recovery

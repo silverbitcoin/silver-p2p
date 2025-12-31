@@ -28,6 +28,9 @@ chrono = { version = "0.4", features = ["serde"] }
 rand = { version = "0.8", features = ["std", "std_rng"] }
 bytes = "1.5"
 anyhow = "1.0"
+
+# Logging
+silver-logging = { path = "../silver-logging" }
 log = "0.4"
 toml = "0.8"
 

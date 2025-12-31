@@ -11,7 +11,7 @@ use crate::message_handler::MessageHandler;
 use crate::peer_discovery_coordinator::PeerDiscoveryCoordinator;
 use crate::peer_manager::PeerManager;
 use crate::shutdown_coordination::ShutdownCoordinator;
-use crate::types::{NetworkMessage, PeerInfo, NetworkStats, PeerStats, HealthStatus, NodeRole};
+use crate::types::{HealthStatus, NetworkMessage, NetworkStats, NodeRole, PeerInfo, PeerStats};
 use crate::unicast::UnicastManager;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -55,7 +55,10 @@ impl P2PNetworkManager {
         config.validate()?;
 
         let peer_manager = Arc::new(PeerManager::new(config.max_candidates));
-        let connection_pool = Arc::new(ConnectionPool::new(config.max_peers, config.max_backoff_secs));
+        let connection_pool = Arc::new(ConnectionPool::new(
+            config.max_peers,
+            config.max_backoff_secs,
+        ));
         let message_handler = Arc::new(MessageHandler::new_with_error_handler(
             config.max_message_size_bytes,
             peer_manager.clone(),
@@ -128,7 +131,10 @@ impl P2PNetworkManager {
 
     /// Start the network manager
     pub async fn start(&self) -> Result<()> {
-        info!("Starting P2P network manager for node: {}", self.config.node_id);
+        info!(
+            "Starting P2P network manager for node: {}",
+            self.config.node_id
+        );
 
         // Start health monitoring
         if self.config.enable_health_monitoring {
@@ -158,13 +164,19 @@ impl P2PNetworkManager {
         // Start bootstrap connector if bootstrap nodes are configured
         if !self.config.bootstrap_nodes.is_empty() {
             self.bootstrap_connector.start().await?;
-            info!("Bootstrap connector started with {} bootstrap nodes", self.config.bootstrap_nodes.len());
+            info!(
+                "Bootstrap connector started with {} bootstrap nodes",
+                self.config.bootstrap_nodes.len()
+            );
         }
 
         // Start peer discovery coordinator if enabled
         if self.config.enable_peer_discovery {
             self.discovery_coordinator.start().await?;
-            info!("Peer discovery coordinator started with min_peers: {}", self.config.min_peers);
+            info!(
+                "Peer discovery coordinator started with min_peers: {}",
+                self.config.min_peers
+            );
         }
 
         // Start legacy peer discovery if enabled (for backward compatibility)
@@ -247,7 +259,10 @@ impl P2PNetworkManager {
                     for candidate in candidates.iter().take(5) {
                         let peer_id = format!("candidate_{}", candidate.replace(":", "_"));
                         // Attempt to add candidate peer
-                        match peer_manager.add_peer(peer_id.clone(), candidate.clone(), NodeRole::RPC).await {
+                        match peer_manager
+                            .add_peer(peer_id.clone(), candidate.clone(), NodeRole::RPC)
+                            .await
+                        {
                             Ok(_) => {
                                 // Mark as connected
                                 if (peer_manager.mark_connected(&peer_id).await).is_ok() {
@@ -274,14 +289,17 @@ impl P2PNetworkManager {
     /// Broadcast message to all connected peers
     pub async fn broadcast(&self, msg: NetworkMessage) -> Result<usize> {
         let result = self.broadcast_manager.broadcast(msg).await?;
-        
+
         if result.failed_sends > 0 {
             warn!(
                 "Broadcast completed with failures: {} successful, {} failed",
                 result.successful_sends, result.failed_sends
             );
         } else {
-            info!("Broadcast completed successfully to {} peers", result.successful_sends);
+            info!(
+                "Broadcast completed successfully to {} peers",
+                result.successful_sends
+            );
         }
 
         Ok(result.successful_sends)
@@ -293,15 +311,21 @@ impl P2PNetworkManager {
         msg: NetworkMessage,
         peer_ids: Vec<String>,
     ) -> Result<usize> {
-        let result = self.broadcast_manager.broadcast_to_peers(msg, peer_ids).await?;
-        
+        let result = self
+            .broadcast_manager
+            .broadcast_to_peers(msg, peer_ids)
+            .await?;
+
         if result.failed_sends > 0 {
             warn!(
                 "Targeted broadcast completed with failures: {} successful, {} failed",
                 result.successful_sends, result.failed_sends
             );
         } else {
-            info!("Targeted broadcast completed successfully to {} peers", result.successful_sends);
+            info!(
+                "Targeted broadcast completed successfully to {} peers",
+                result.successful_sends
+            );
         }
 
         Ok(result.successful_sends)
@@ -327,20 +351,19 @@ impl P2PNetworkManager {
     }
 
     /// Send message to multiple specific peers
-    pub async fn send_to_peers(
-        &self,
-        peer_ids: Vec<String>,
-        msg: NetworkMessage,
-    ) -> Result<usize> {
+    pub async fn send_to_peers(&self, peer_ids: Vec<String>, msg: NetworkMessage) -> Result<usize> {
         let result = self.unicast_manager.send_to_peers(peer_ids, msg).await?;
-        
+
         if result.failed_sends > 0 {
             warn!(
                 "Unicast to peers completed with failures: {} successful, {} failed",
                 result.successful_sends, result.failed_sends
             );
         } else {
-            info!("Unicast to peers completed successfully to {} peers", result.successful_sends);
+            info!(
+                "Unicast to peers completed successfully to {} peers",
+                result.successful_sends
+            );
         }
 
         Ok(result.successful_sends)
@@ -386,11 +409,7 @@ impl P2PNetworkManager {
             0
         };
 
-        let uptime = self
-            .start_time
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs();
+        let uptime = self.start_time.elapsed().unwrap_or_default().as_secs();
 
         let mut peer_stats = HashMap::new();
         for peer in &peers {
@@ -437,7 +456,9 @@ impl P2PNetworkManager {
     }
 
     /// Get peer discovery statistics
-    pub async fn get_discovery_stats(&self) -> crate::peer_discovery_coordinator::PeerDiscoveryStats {
+    pub async fn get_discovery_stats(
+        &self,
+    ) -> crate::peer_discovery_coordinator::PeerDiscoveryStats {
         self.discovery_coordinator.get_stats().await
     }
 
@@ -449,13 +470,13 @@ impl P2PNetworkManager {
     /// Get peer metrics for a specific peer
     /// Returns messages sent/received, bytes sent/received, and latency
     /// This is a non-blocking operation that returns immediately without affecting network operations
-    /// 
+    ///
     /// # Arguments
     /// * `peer_id` - The ID of the peer to retrieve metrics for
-    /// 
+    ///
     /// # Returns
     /// * `Result<PeerStats>` - Peer statistics including messages and bytes sent/received, and latency
-    /// 
+    ///
     /// # Errors
     /// Returns `P2PError::PeerNotFound` if the peer does not exist
     pub async fn get_peer_metrics(&self, peer_id: &str) -> Result<PeerStats> {
@@ -473,13 +494,13 @@ impl P2PNetworkManager {
     /// Get metrics for all peers
     /// Returns a map of peer IDs to their statistics
     /// This is a non-blocking operation that returns immediately without affecting network operations
-    /// 
+    ///
     /// # Returns
     /// * `HashMap<String, PeerStats>` - Map of peer ID to peer statistics
     pub async fn get_all_peer_metrics(&self) -> HashMap<String, PeerStats> {
         let peers = self.peer_manager.get_all_peers().await;
         let mut metrics = HashMap::new();
-        
+
         for peer in peers {
             metrics.insert(
                 peer.peer_id.clone(),
@@ -493,12 +514,12 @@ impl P2PNetworkManager {
                 },
             );
         }
-        
+
         metrics
     }
 
     /// Graceful shutdown with 30-second grace period for pending messages
-    /// 
+    ///
     /// This method implements a graceful shutdown sequence using the ShutdownCoordinator:
     /// 1. Stop accepting new connections
     /// 2. Wait up to 30 seconds for pending messages to complete
@@ -507,9 +528,9 @@ impl P2PNetworkManager {
     /// 5. Clear all peer state
     /// 6. Release all network resources
     /// 7. Exit cleanly
-    /// 
+    ///
     /// This method is idempotent - calling it multiple times is safe and will succeed.
-    /// 
+    ///
     /// # Returns
     /// * `Result<()>` - Success or error during shutdown
     pub async fn shutdown(&self) -> Result<()> {
@@ -522,21 +543,23 @@ impl P2PNetworkManager {
                     "Graceful shutdown completed in {} ms: {} connections closed, {} peers cleared, {} candidates cleared",
                     stats.shutdown_time_ms, stats.connections_closed, stats.peers_cleared, stats.candidates_cleared
                 );
-                
+
                 if stats.grace_period_exceeded {
                     warn!("Grace period was exceeded during shutdown");
                 }
-                
+
                 if !stats.all_components_stopped {
                     warn!("Some components did not stop cleanly during shutdown");
                 }
-                
+
                 Ok(())
             }
             Err(e) => {
                 // If shutdown is already in progress, that's OK - just return success
                 // This makes the shutdown method idempotent
-                if e.to_string().contains("already in progress") || e.to_string().contains("Shutdown already in progress") {
+                if e.to_string().contains("already in progress")
+                    || e.to_string().contains("Shutdown already in progress")
+                {
                     info!("Shutdown already in progress, returning success");
                     Ok(())
                 } else {

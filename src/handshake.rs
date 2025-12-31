@@ -48,14 +48,16 @@ impl HandshakeMessage {
 
     /// Serialize handshake message to bytes
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        serde_json::to_vec(self)
-            .map_err(|e| P2PError::SerializationError(format!("Failed to serialize handshake: {}", e)))
+        serde_json::to_vec(self).map_err(|e| {
+            P2PError::SerializationError(format!("Failed to serialize handshake: {}", e))
+        })
     }
 
     /// Deserialize handshake message from bytes
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
-        serde_json::from_slice(data)
-            .map_err(|e| P2PError::DeserializationError(format!("Failed to deserialize handshake: {}", e)))
+        serde_json::from_slice(data).map_err(|e| {
+            P2PError::DeserializationError(format!("Failed to deserialize handshake: {}", e))
+        })
     }
 }
 
@@ -283,7 +285,10 @@ impl HandshakeHandler {
             .as_secs();
 
         if handshake.timestamp > now + 3600 || handshake.timestamp + 3600 < now {
-            warn!("Handshake timestamp is unreasonable: {}", handshake.timestamp);
+            warn!(
+                "Handshake timestamp is unreasonable: {}",
+                handshake.timestamp
+            );
             return Err(P2PError::InvalidHandshake(
                 "Handshake timestamp is unreasonable".to_string(),
             ));

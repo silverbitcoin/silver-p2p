@@ -49,11 +49,7 @@ impl ReconnectionManager {
     }
 
     /// Schedule a reconnection attempt for a peer
-    pub async fn schedule_reconnect(
-        &self,
-        peer_id: String,
-        peer_addr: SocketAddr,
-    ) -> Result<()> {
+    pub async fn schedule_reconnect(&self, peer_id: String, peer_addr: SocketAddr) -> Result<()> {
         // Get or create backoff state
         let mut backoff = self
             .backoff_states
@@ -374,7 +370,7 @@ mod tests {
         let mut backoff = BackoffState::new(300);
         // After creation, should be ready to retry immediately
         assert_eq!(backoff.current_delay_secs, 1);
-        
+
         // After next_delay, should have incremented attempts
         backoff.next_delay();
         assert_eq!(backoff.failed_attempts, 1);
@@ -396,7 +392,7 @@ mod tests {
     async fn test_reconnection_event_creation() {
         let event = ReconnectionEvent {
             peer_id: "peer1".to_string(),
-            peer_addr: "127.0.0.1:9000".parse().unwrap(),
+            peer_addr: "127.0.0.1:9000".parse().map_err(|e| format!("Parse failed: {}", e))?,
             attempt: 1,
             backoff_secs: 2,
         };

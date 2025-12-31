@@ -1,18 +1,18 @@
 //! Message serialization and handling
 
+use crate::connection_pool::ConnectionPool;
 use crate::error::{P2PError, Result};
-use crate::types::NetworkMessage;
-use crate::message_chunking::{MessageChunker, ChunkedMessage};
+use crate::message_chunking::{ChunkedMessage, MessageChunker};
 use crate::message_error_handler::MessageErrorHandler;
 use crate::peer_manager::PeerManager;
-use crate::connection_pool::ConnectionPool;
-use bytes::{BytesMut, BufMut, Buf};
-use dashmap::DashMap;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::types::NetworkMessage;
 use async_trait::async_trait;
-use tracing::{debug, warn, error};
+use bytes::{Buf, BufMut, BytesMut};
+use dashmap::DashMap;
 use serde_json;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use tracing::{debug, error, warn};
 
 /// Message handler function trait
 #[async_trait]
@@ -138,7 +138,9 @@ impl MessageHandler {
 
         // Update statistics
         self.stats.total_messages.fetch_add(1, Ordering::SeqCst);
-        self.stats.total_bytes.fetch_add(msg_size as u64, Ordering::SeqCst);
+        self.stats
+            .total_bytes
+            .fetch_add(msg_size as u64, Ordering::SeqCst);
         self.stats
             .messages_by_type
             .entry(msg_type.clone())
@@ -154,7 +156,10 @@ impl MessageHandler {
         if let Some(handler) = self.get_handler(&msg_type).await {
             match handler.handle(peer_id.clone(), msg).await {
                 Ok(()) => {
-                    debug!("Successfully handled {} message from peer: {}", msg_type, peer_id);
+                    debug!(
+                        "Successfully handled {} message from peer: {}",
+                        msg_type, peer_id
+                    );
                     Ok(())
                 }
                 Err(e) => {
@@ -179,8 +184,8 @@ impl MessageHandler {
     /// Serialize message with 4-byte length prefix in little-endian format
     /// For messages exceeding 10 MB, returns the first chunk only (caller handles chunking)
     pub async fn serialize(&self, msg: &NetworkMessage) -> Result<Vec<u8>> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| P2PError::SerializationError(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| P2PError::SerializationError(e.to_string()))?;
 
         if data.len() > self.max_message_size {
             return Err(P2PError::MessageTooLarge(data.len(), self.max_message_size));
@@ -196,8 +201,8 @@ impl MessageHandler {
     /// Serialize message with automatic chunking for large messages
     /// Returns a vector of serialized chunks if message exceeds 10 MB, otherwise returns single serialized message
     pub async fn serialize_with_chunking(&self, msg: &NetworkMessage) -> Result<Vec<Vec<u8>>> {
-        let data = serde_json::to_vec(msg)
-            .map_err(|e| P2PError::SerializationError(e.to_string()))?;
+        let data =
+            serde_json::to_vec(msg).map_err(|e| P2PError::SerializationError(e.to_string()))?;
 
         if data.len() > self.max_message_size {
             return Err(P2PError::MessageTooLarge(data.len(), self.max_message_size));
@@ -259,8 +264,7 @@ impl MessageHandler {
         }
 
         let msg_data = &buf[..len];
-        serde_json::from_slice(msg_data)
-            .map_err(|e| P2PError::DeserializationError(e.to_string()))
+        serde_json::from_slice(msg_data).map_err(|e| P2PError::DeserializationError(e.to_string()))
     }
 
     /// Deserialize message with error handling for malformed data
@@ -271,11 +275,12 @@ impl MessageHandler {
     ) -> Result<NetworkMessage> {
         // Validate format first
         if data.len() < 4 {
-            let error = P2PError::InvalidMessageFormat(
-                "Message too short for length prefix".to_string(),
-            );
+            let error =
+                P2PError::InvalidMessageFormat("Message too short for length prefix".to_string());
             if let Some(handler) = &self.error_handler {
-                handler.handle_format_error(peer_id, &error).await.ok();
+                if let Err(e) = handler.handle_format_error(peer_id, &error).await {
+                    error!("Failed to handle format error for peer {}: {}", peer_id, e);
+                }
             }
             return Err(error);
         }
@@ -286,17 +291,19 @@ impl MessageHandler {
         if len > self.max_message_size {
             let error = P2PError::MessageTooLarge(len, self.max_message_size);
             if let Some(handler) = &self.error_handler {
-                handler.handle_format_error(peer_id, &error).await.ok();
+                if let Err(e) = handler.handle_format_error(peer_id, &error).await {
+                    error!("Failed to handle format error for peer {}: {}", peer_id, e);
+                }
             }
             return Err(error);
         }
 
         if buf.len() < len {
-            let error = P2PError::InvalidMessageFormat(
-                "Incomplete message data".to_string(),
-            );
+            let error = P2PError::InvalidMessageFormat("Incomplete message data".to_string());
             if let Some(handler) = &self.error_handler {
-                handler.handle_format_error(peer_id, &error).await.ok();
+                if let Err(e) = handler.handle_format_error(peer_id, &error).await {
+                    error!("Failed to handle format error for peer {}: {}", peer_id, e);
+                }
             }
             return Err(error);
         }
@@ -313,7 +320,12 @@ impl MessageHandler {
             Err(e) => {
                 let error = P2PError::DeserializationError(e.to_string());
                 if let Some(handler) = &self.error_handler {
-                    handler.handle_deserialization_error(peer_id, &error).await.ok();
+                    if let Err(handler_err) = handler
+                        .handle_deserialization_error(peer_id, &error)
+                        .await
+                    {
+                        error!("Failed to handle deserialization error for peer {}: {}", peer_id, handler_err);
+                    }
                 }
                 Err(error)
             }
@@ -322,7 +334,11 @@ impl MessageHandler {
 
     /// Deserialize a chunk and attempt reassembly
     /// Returns Some(NetworkMessage) if reassembly is complete, None if waiting for more chunks
-    pub async fn deserialize_chunk(&self, peer_id: &str, data: &[u8]) -> Result<Option<NetworkMessage>> {
+    pub async fn deserialize_chunk(
+        &self,
+        peer_id: &str,
+        data: &[u8],
+    ) -> Result<Option<NetworkMessage>> {
         if data.len() < 4 {
             return Err(P2PError::InvalidMessageFormat(
                 "Chunk too short for length prefix".to_string(),
@@ -343,7 +359,7 @@ impl MessageHandler {
         }
 
         let chunk_data = &buf[..len];
-        
+
         // Try to deserialize as ChunkedMessage first (for multi-chunk messages)
         if let Ok(chunk) = serde_json::from_slice::<ChunkedMessage>(chunk_data) {
             // This is a chunked message, add it and check if reassembly is complete
@@ -360,7 +376,12 @@ impl MessageHandler {
                     Err(e) => {
                         let error = P2PError::DeserializationError(e.to_string());
                         if let Some(handler) = &self.error_handler {
-                            handler.handle_deserialization_error(peer_id, &error).await.ok();
+                            if let Err(handler_err) = handler
+                                .handle_deserialization_error(peer_id, &error)
+                                .await
+                            {
+                                error!("Failed to handle deserialization error for peer {}: {}", peer_id, handler_err);
+                            }
                         }
                         Err(error)
                     }
@@ -382,7 +403,12 @@ impl MessageHandler {
                 Err(e) => {
                     let error = P2PError::DeserializationError(e.to_string());
                     if let Some(handler) = &self.error_handler {
-                        handler.handle_deserialization_error(peer_id, &error).await.ok();
+                        if let Err(handler_err) = handler
+                            .handle_deserialization_error(peer_id, &error)
+                            .await
+                        {
+                            error!("Failed to handle deserialization error for peer {}: {}", peer_id, handler_err);
+                        }
                     }
                     Err(error)
                 }
@@ -415,7 +441,9 @@ impl MessageHandler {
         data: &[u8],
     ) -> Result<usize> {
         if let Some(handler) = &self.error_handler {
-            handler.validate_message_format(peer_id, data, self.max_message_size).await
+            handler
+                .validate_message_format(peer_id, data, self.max_message_size)
+                .await
         } else {
             self.validate_format(data).await
         }
@@ -595,9 +623,7 @@ mod tests {
             .unwrap();
 
         let msg = NetworkMessage::Ping { nonce: 123 };
-        let result = handler
-            .handle_message("peer1".to_string(), msg)
-            .await;
+        let result = handler.handle_message("peer1".to_string(), msg).await;
 
         assert!(result.is_ok());
         let (total, _, errors) = handler.get_stats().await;
@@ -610,9 +636,7 @@ mod tests {
         let handler = MessageHandler::new(100 * 1024 * 1024);
 
         let msg = NetworkMessage::Ping { nonce: 123 };
-        let result = handler
-            .handle_message("peer1".to_string(), msg)
-            .await;
+        let result = handler.handle_message("peer1".to_string(), msg).await;
 
         assert!(result.is_err());
         let (total, _, errors) = handler.get_stats().await;
@@ -631,9 +655,7 @@ mod tests {
             .unwrap();
 
         let msg = NetworkMessage::Ping { nonce: 123 };
-        let result = handler
-            .handle_message("peer1".to_string(), msg)
-            .await;
+        let result = handler.handle_message("peer1".to_string(), msg).await;
 
         assert!(result.is_err());
         let (total, _, errors) = handler.get_stats().await;
@@ -769,10 +791,13 @@ mod tests {
         // Serialize with chunking (even though it won't chunk small messages)
         let chunks = handler.serialize_with_chunking(&msg).await.unwrap();
         assert_eq!(chunks.len(), 1);
-        
+
         // Single message chunk should deserialize directly
-        let result = handler.deserialize_chunk("peer1", &chunks[0]).await.unwrap();
-        
+        let result = handler
+            .deserialize_chunk("peer1", &chunks[0])
+            .await
+            .unwrap();
+
         // Single message should complete immediately
         assert!(result.is_some());
         assert_eq!(result.unwrap(), msg);
@@ -781,7 +806,7 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_timed_out_chunks() {
         let handler = MessageHandler::new(100 * 1024 * 1024);
-        
+
         let count = handler.cleanup_timed_out_chunks().await;
         assert_eq!(count, 0);
     }
@@ -789,7 +814,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_incomplete_chunk_count() {
         let handler = MessageHandler::new(100 * 1024 * 1024);
-        
+
         let count = handler.get_incomplete_chunk_count().await;
         assert_eq!(count, 0);
     }
@@ -797,7 +822,7 @@ mod tests {
     #[tokio::test]
     async fn test_clear_peer_chunks() {
         let handler = MessageHandler::new(100 * 1024 * 1024);
-        
+
         handler.clear_peer_chunks("peer1").await;
         assert_eq!(handler.get_incomplete_chunk_count().await, 0);
     }

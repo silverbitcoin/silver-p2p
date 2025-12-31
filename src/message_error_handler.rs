@@ -1,12 +1,12 @@
 //! Message error handling and malformed data detection
 
-use crate::error::{P2PError, Result};
-use crate::types::NetworkMessage;
-use crate::peer_manager::PeerManager;
 use crate::connection_pool::ConnectionPool;
-use std::sync::Arc;
+use crate::error::{P2PError, Result};
+use crate::peer_manager::PeerManager;
+use crate::types::NetworkMessage;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tracing::{error, warn, debug};
+use std::sync::Arc;
+use tracing::{debug, error, warn};
 
 /// Message error statistics
 pub struct MessageErrorStats {
@@ -34,10 +34,7 @@ pub struct MessageErrorHandler {
 
 impl MessageErrorHandler {
     /// Create new message error handler
-    pub fn new(
-        peer_manager: Arc<PeerManager>,
-        connection_pool: Arc<ConnectionPool>,
-    ) -> Self {
+    pub fn new(peer_manager: Arc<PeerManager>, connection_pool: Arc<ConnectionPool>) -> Self {
         Self {
             peer_manager,
             connection_pool,
@@ -53,17 +50,10 @@ impl MessageErrorHandler {
 
     /// Handle message parsing error
     /// Logs error, marks peer as unhealthy, and disconnects peer
-    pub async fn handle_parsing_error(
-        &self,
-        peer_id: &str,
-        error: &P2PError,
-    ) -> Result<()> {
+    pub async fn handle_parsing_error(&self, peer_id: &str, error: &P2PError) -> Result<()> {
         self.stats.parsing_errors.fetch_add(1, Ordering::SeqCst);
 
-        error!(
-            "Message parsing error from peer {}: {}",
-            peer_id, error
-        );
+        error!("Message parsing error from peer {}: {}", peer_id, error);
 
         // Mark peer as unhealthy
         self.peer_manager
@@ -78,17 +68,10 @@ impl MessageErrorHandler {
 
     /// Handle malformed message error
     /// Logs error, marks peer as unhealthy, and disconnects peer
-    pub async fn handle_malformed_message(
-        &self,
-        peer_id: &str,
-        reason: &str,
-    ) -> Result<()> {
+    pub async fn handle_malformed_message(&self, peer_id: &str, reason: &str) -> Result<()> {
         self.stats.malformed_messages.fetch_add(1, Ordering::SeqCst);
 
-        error!(
-            "Malformed message from peer {}: {}",
-            peer_id, reason
-        );
+        error!("Malformed message from peer {}: {}", peer_id, reason);
 
         // Mark peer as unhealthy
         self.peer_manager
@@ -108,12 +91,11 @@ impl MessageErrorHandler {
         peer_id: &str,
         error: &P2PError,
     ) -> Result<()> {
-        self.stats.deserialization_errors.fetch_add(1, Ordering::SeqCst);
+        self.stats
+            .deserialization_errors
+            .fetch_add(1, Ordering::SeqCst);
 
-        error!(
-            "Deserialization error from peer {}: {}",
-            peer_id, error
-        );
+        error!("Deserialization error from peer {}: {}", peer_id, error);
 
         // Mark peer as unhealthy
         self.peer_manager
@@ -128,17 +110,10 @@ impl MessageErrorHandler {
 
     /// Handle message format validation error
     /// Logs error, marks peer as unhealthy, and disconnects peer
-    pub async fn handle_format_error(
-        &self,
-        peer_id: &str,
-        error: &P2PError,
-    ) -> Result<()> {
+    pub async fn handle_format_error(&self, peer_id: &str, error: &P2PError) -> Result<()> {
         self.stats.format_errors.fetch_add(1, Ordering::SeqCst);
 
-        error!(
-            "Message format error from peer {}: {}",
-            peer_id, error
-        );
+        error!("Message format error from peer {}: {}", peer_id, error);
 
         // Mark peer as unhealthy
         self.peer_manager
@@ -161,9 +136,8 @@ impl MessageErrorHandler {
     ) -> Result<usize> {
         // Check minimum length for header
         if data.len() < 4 {
-            let error = P2PError::InvalidMessageFormat(
-                "Message too short for length prefix".to_string(),
-            );
+            let error =
+                P2PError::InvalidMessageFormat("Message too short for length prefix".to_string());
             self.handle_format_error(peer_id, &error).await?;
             return Err(error);
         }
@@ -180,9 +154,7 @@ impl MessageErrorHandler {
 
         // Validate we have complete message
         if data.len() < len + 4 {
-            let error = P2PError::InvalidMessageFormat(
-                "Incomplete message data".to_string(),
-            );
+            let error = P2PError::InvalidMessageFormat("Incomplete message data".to_string());
             self.handle_format_error(peer_id, &error).await?;
             return Err(error);
         }
@@ -197,18 +169,13 @@ impl MessageErrorHandler {
 
     /// Validate deserialized message
     /// Returns Ok if message is valid, Err if message is invalid
-    pub async fn validate_message(
-        &self,
-        peer_id: &str,
-        msg: &NetworkMessage,
-    ) -> Result<()> {
+    pub async fn validate_message(&self, peer_id: &str, msg: &NetworkMessage) -> Result<()> {
         // Validate message type is not empty
         let msg_type = msg.message_type();
         if msg_type.is_empty() {
-            let error = P2PError::InvalidMessageFormat(
-                "Message type cannot be empty".to_string(),
-            );
-            self.handle_malformed_message(peer_id, "Empty message type").await?;
+            let error = P2PError::InvalidMessageFormat("Message type cannot be empty".to_string());
+            self.handle_malformed_message(peer_id, "Empty message type")
+                .await?;
             return Err(error);
         }
 
@@ -282,12 +249,18 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
         let data = vec![1, 2];
-        let result = handler.validate_message_format("peer1", &data, 100 * 1024 * 1024).await;
+        let result = handler
+            .validate_message_format("peer1", &data, 100 * 1024 * 1024)
+            .await;
 
         assert!(result.is_err());
         let (_parsing, _malformed, _deser, format, disconnected) = handler.get_stats().await;
@@ -303,7 +276,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -328,7 +305,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -353,7 +334,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -379,7 +364,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -406,7 +395,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -435,7 +428,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -465,7 +462,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -492,7 +493,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 
@@ -516,7 +521,11 @@ mod tests {
 
         // Add peer first
         peer_manager
-            .add_peer("peer1".to_string(), "127.0.0.1:9000".to_string(), NodeRole::Validator)
+            .add_peer(
+                "peer1".to_string(),
+                "127.0.0.1:9000".to_string(),
+                NodeRole::Validator,
+            )
             .await
             .unwrap();
 

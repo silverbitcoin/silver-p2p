@@ -1,8 +1,8 @@
 //! Core types for P2P network
 
 use serde::{Deserialize, Serialize};
-use std::time::SystemTime;
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 /// Network message types
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -221,7 +221,7 @@ impl PeerState {
     pub fn record_successful_ping(&mut self) {
         self.consecutive_successful_pings += 1;
         self.consecutive_failed_pings = 0;
-        
+
         // Increase health score by 5 points per successful ping, max 100
         self.health_score = std::cmp::min(100, self.health_score + 5);
     }
@@ -230,7 +230,7 @@ impl PeerState {
     pub fn record_failed_ping(&mut self) {
         self.consecutive_failed_pings += 1;
         self.consecutive_successful_pings = 0;
-        
+
         // Decrease health score by 10 points per failed ping, min 0
         self.health_score = self.health_score.saturating_sub(10);
     }
@@ -384,10 +384,7 @@ impl BackoffState {
     /// Calculate next backoff delay
     pub fn next_delay(&mut self) -> u64 {
         self.failed_attempts += 1;
-        self.current_delay_secs = std::cmp::min(
-            self.current_delay_secs * 2,
-            self.max_delay_secs,
-        );
+        self.current_delay_secs = std::cmp::min(self.current_delay_secs * 2, self.max_delay_secs);
         self.last_attempt = SystemTime::now();
         self.current_delay_secs
     }
@@ -401,11 +398,7 @@ impl BackoffState {
 
     /// Check if ready to retry
     pub fn is_ready_to_retry(&self) -> bool {
-        let elapsed = self
-            .last_attempt
-            .elapsed()
-            .unwrap_or_default()
-            .as_secs();
+        let elapsed = self.last_attempt.elapsed().unwrap_or_default().as_secs();
         elapsed >= self.current_delay_secs
     }
 }
@@ -416,11 +409,11 @@ mod tests {
 
     #[test]
     fn test_network_message_type() {
-        assert_eq!(NetworkMessage::PeerListRequest.message_type(), "PeerListRequest");
         assert_eq!(
-            NetworkMessage::Ping { nonce: 123 }.message_type(),
-            "Ping"
+            NetworkMessage::PeerListRequest.message_type(),
+            "PeerListRequest"
         );
+        assert_eq!(NetworkMessage::Ping { nonce: 123 }.message_type(), "Ping");
     }
 
     #[test]
@@ -445,10 +438,10 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Start at 100
         assert_eq!(peer.health_score, 100);
-        
+
         // Successful ping increases score by 5
         peer.record_successful_ping();
         assert_eq!(peer.health_score, 100); // Already at max
@@ -463,10 +456,10 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Start at 100
         assert_eq!(peer.health_score, 100);
-        
+
         // Failed ping decreases score by 10
         peer.record_failed_ping();
         assert_eq!(peer.health_score, 90);
@@ -481,13 +474,13 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Simulate 5 failed pings
         for _ in 0..5 {
             peer.record_failed_ping();
         }
         assert_eq!(peer.health_score, 50);
-        
+
         // Now successful pings should increase score
         peer.record_successful_ping();
         assert_eq!(peer.health_score, 55);
@@ -502,7 +495,7 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Simulate 8 failed pings (score = 20)
         for _ in 0..8 {
             peer.record_failed_ping();
@@ -518,19 +511,19 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Simulate 5 failed pings (score = 50)
         for _ in 0..5 {
             peer.record_failed_ping();
         }
         assert_eq!(peer.health_score, 50);
         assert!(peer.can_recover()); // score >= 50
-        
+
         // Simulate 1 more failed ping (score = 40)
         peer.record_failed_ping();
         assert_eq!(peer.health_score, 40);
         assert!(!peer.can_recover()); // score < 50
-        
+
         // Simulate 4 more failed pings (score = 0)
         for _ in 0..4 {
             peer.record_failed_ping();
@@ -546,13 +539,13 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Simulate failures
         for _ in 0..5 {
             peer.record_failed_ping();
         }
         assert_eq!(peer.health_score, 50);
-        
+
         // Reset
         peer.reset_health_score();
         assert_eq!(peer.health_score, 100);
@@ -567,13 +560,13 @@ mod tests {
             "127.0.0.1:9000".to_string(),
             NodeRole::Validator,
         );
-        
+
         // Test max bound (100)
         for _ in 0..20 {
             peer.record_successful_ping();
         }
         assert_eq!(peer.health_score, 100);
-        
+
         // Test min bound (0)
         for _ in 0..20 {
             peer.record_failed_ping();
